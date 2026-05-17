@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import math
+import multiprocessing
 import os
 import time
 from collections.abc import Callable
 from dataclasses import replace
 
+from dangosim.core.batch import resolve_worker_count
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
 from dangosim.gui.batch_estimation import estimate_sample_runs, estimate_seconds_from_sample
@@ -34,6 +36,7 @@ APP_TITLE = "DangoSimulator 小團快跑模擬器"
 
 
 def run() -> int:
+    multiprocessing.freeze_support()
     try:
         from PySide6.QtCore import QThread, QTimer, Qt, Signal
         from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
@@ -191,12 +194,20 @@ def run() -> int:
         failed = Signal(str)
         progress_changed = Signal(int, int, float)
 
-        def __init__(self, config: RaceConfig, runs: int, seed: int | None, seed_mode: SeedMode) -> None:
+        def __init__(
+            self,
+            config: RaceConfig,
+            runs: int,
+            seed: int | None,
+            seed_mode: SeedMode,
+            workers: int | str | None,
+        ) -> None:
             super().__init__()
             self.config = config
             self.runs = runs
             self.seed = seed
             self.seed_mode = seed_mode
+            self.workers = workers
             self._cancel_requested = False
 
         def cancel(self) -> None:
@@ -218,6 +229,7 @@ def run() -> int:
                     seed_mode=self.seed_mode,
                     progress_callback=report_progress,
                     cancel_requested=lambda: self._cancel_requested,
+                    workers=self.workers,
                 )
                 if result.cancelled:
                     self.cancelled_with_result.emit(result)
@@ -506,16 +518,18 @@ def run() -> int:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             runs = self.run_count.value()
-            sample_runs, estimate_seconds = self.estimate_batch(config, runs, seed)
+            sample_runs, estimate_seconds, worker_count = self.estimate_batch(config, runs, seed)
             QMessageBox.information(
                 self,
                 "多輪模擬預估",
-                f"已先試跑 {sample_runs} 場。\n預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
+                f"已先試跑 {sample_runs} 場。\n"
+                f"正式模擬會使用 {worker_count} 個 worker。\n"
+                f"預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
             )
             self.batch_running = True
             self.reset_batch_progress(total=runs)
             self.apply_control_state()
-            self.worker = SimulationWorker(config, runs, seed, mode)
+            self.worker = SimulationWorker(config, runs, seed, mode, workers="auto")
             self.worker.finished_with_result.connect(self.render_results)
             self.worker.cancelled_with_result.connect(self.handle_batch_cancelled)
             self.worker.progress_changed.connect(self.update_batch_progress)
@@ -579,17 +593,20 @@ def run() -> int:
             self.batch_progress.setFormat(f"0 / {maximum if total else 0}")
             self.batch_eta.setText("ETA：-")
 
-        def estimate_batch(self, config: RaceConfig, runs: int, seed: int | None) -> tuple[int, float]:
+        def estimate_batch(self, config: RaceConfig, runs: int, seed: int | None) -> tuple[int, float, int]:
             sample_runs = estimate_sample_runs(runs)
             sample_seed = seed if seed is not None else config.seed or 0
             started_at = time.perf_counter()
-            run_batch_simulation(config, runs=sample_runs, seed=sample_seed, seed_mode=SeedMode.FIXED)
+            run_batch_simulation(config, runs=sample_runs, seed=sample_seed, seed_mode=SeedMode.FIXED, workers=1)
             elapsed = time.perf_counter() - started_at
-            return sample_runs, estimate_seconds_from_sample(
+            worker_count = resolve_worker_count("auto", runs=runs)
+            sequential_estimate = estimate_seconds_from_sample(
                 elapsed_seconds=elapsed,
                 sample_runs=sample_runs,
                 total_runs=runs,
             )
+            parallel_estimate = sequential_estimate / worker_count
+            return sample_runs, parallel_estimate, worker_count
 
         def apply_control_state(self) -> None:
             simulation_active = self.single_race_active or self.batch_running
@@ -704,4 +721,5 @@ def run() -> int:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     raise SystemExit(run())
