@@ -9,6 +9,7 @@ from dangosim.gui.view_models import (
     build_participant_cards,
     build_race_config_from_cards,
     format_event_log_message,
+    is_auto_play_control_enabled,
     rank_simulation_rows,
 )
 import pytest
@@ -73,6 +74,12 @@ def test_format_event_log_message_only_indents_detail_events() -> None:
     assert format_event_log_message("第 1 回合行動順序：lu、fei") == "第 1 回合行動順序：lu、fei"
     assert format_event_log_message("比賽結束，菲比團子 取得第 1 名。") == "比賽結束，菲比團子 取得第 1 名。"
     assert format_event_log_message("菲比團子 觸發 advance") == "　　菲比團子 觸發 advance"
+
+
+def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:
+    assert is_auto_play_control_enabled(single_race_active=False, batch_running=False) is True
+    assert is_auto_play_control_enabled(single_race_active=True, batch_running=False) is True
+    assert is_auto_play_control_enabled(single_race_active=False, batch_running=True) is False
 
 
 def test_participant_card_state_rejects_ranked_boss_mode_for_non_boss() -> None:

@@ -106,6 +106,10 @@ def format_event_log_message(message: str) -> str:
     return f"　　{message}"
 
 
+def is_auto_play_control_enabled(*, single_race_active: bool, batch_running: bool) -> bool:
+    return not batch_running
+
+
 def build_race_config_from_cards(config: RaceConfig, cards: list[ParticipantCardState]) -> RaceConfig:
     by_id = {card.dango_id: card.normalized() for card in cards}
     selected_dangos: list[DangoConfig] = []

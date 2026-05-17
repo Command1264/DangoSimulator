@@ -29,6 +29,7 @@ from dangosim.gui.view_models import (
     build_participant_cards,
     build_race_config_from_cards,
     format_event_log_message,
+    is_auto_play_control_enabled,
 )
 from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
@@ -644,7 +645,12 @@ def run() -> int:
 
             self.start_button.setEnabled(not simulation_active)
             self.step_button.setEnabled(self.single_race_active)
-            self.auto_play.setEnabled(self.single_race_active)
+            self.auto_play.setEnabled(
+                is_auto_play_control_enabled(
+                    single_race_active=self.single_race_active,
+                    batch_running=self.batch_running,
+                )
+            )
             self.pause_button.setEnabled(self.single_race_active)
             self.reset_button.setEnabled(self.single_race_active)
             self.speed.setEnabled(True)
