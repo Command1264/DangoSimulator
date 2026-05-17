@@ -71,6 +71,8 @@ class DangoConfig:
     is_boss: bool = False
     ranked: bool = True
     abilities: tuple[AbilityConfig, ...] = ()
+    group: str = "預設"
+    skill_note: str = ""
 
     def __post_init__(self) -> None:
         if not self.id:

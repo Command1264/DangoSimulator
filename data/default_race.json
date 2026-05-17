@@ -20,42 +20,49 @@
     {
       "id": "lu",
       "name": "陸・赫斯團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "觸發推進裝置時額外前進 3 格；觸發阻遏裝置時額外後退 1 格。"
     },
     {
       "id": "west",
       "name": "西格莉卡團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "每輪標記排名緊鄰自身且更高的至多兩個團子。"
     },
     {
       "id": "daphne",
       "name": "達妮婭團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "投骰子時若與上一次相同，額外前進 2 格。"
     },
     {
       "id": "snow",
       "name": "緋雪團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "與布大王相遇後，每次移動額外前進 1 格。"
     },
     {
       "id": "kat",
       "name": "卡提希婭團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "自身移動結束後若處於最後一名，剩餘回合 60% 機率額外前進 2 格。"
     },
     {
       "id": "fei",
       "name": "菲比團子",
+      "group": "A組",
       "start_position": 1,
       "ability_note": "50% 機率額外前進 1 格。"
     },
     {
       "id": "boss",
       "name": "布大王",
+      "group": "特殊",
       "start_position": 32,
       "is_boss": true,
       "ranked": false,

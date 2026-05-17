@@ -88,6 +88,8 @@ def _parse_dango(raw: Any, length: int) -> DangoConfig:
             is_boss=bool(raw.get("is_boss", False)),
             ranked=bool(raw.get("ranked", True)),
             abilities=tuple(_parse_abilities(raw.get("abilities", []))),
+            group=str(raw.get("group", "預設")),
+            skill_note=str(raw.get("ability_note", raw.get("skill_note", ""))),
         )
     except KeyError as exc:
         raise ConfigValidationError(f"Missing dango field: {exc.args[0]}") from exc

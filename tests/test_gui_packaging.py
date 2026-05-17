@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from dangosim.gui.app import APP_TITLE
@@ -20,3 +23,21 @@ def test_pyinstaller_spec_includes_data_directory() -> None:
 
     assert "data" in content
     assert "dangosim.gui.app" in content
+
+
+def test_gui_dashboard_can_create_window_offscreen() -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_GUI_SMOKE"] = "1"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
