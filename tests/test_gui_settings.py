@@ -33,6 +33,7 @@ def test_user_settings_round_trip_json(tmp_path: Path) -> None:
             seed_mode="system",
             seed="123456",
             sort_mode="勝率",
+            workers="4",
         ),
     )
 
@@ -65,7 +66,8 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
             "runs": 999999999,
             "seed_mode": "bad",
             "seed": 123,
-            "sort_mode": "bad"
+            "sort_mode": "bad",
+            "workers": "bad"
           }
         }
         """,
@@ -81,6 +83,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
     assert settings.batch_simulation.seed_mode == "fixed"
     assert settings.batch_simulation.seed == "123"
     assert settings.batch_simulation.sort_mode == "綜合分數"
+    assert settings.batch_simulation.workers == "auto"
 
 
 def test_apply_settings_to_cards_restores_participants_and_boss_mode() -> None:

@@ -366,6 +366,9 @@ def run() -> int:
             self.seed_input = QLineEdit(str(self.base_config.seed or 0))
             self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
             self.seed_input.setMinimumWidth(185)
+            self.worker_count = QComboBox()
+            self.populate_worker_options()
+            self.worker_count.setToolTip("多輪模擬使用的 CPU worker 數量")
             self.sort_mode = QComboBox()
             self.sort_mode.addItems(["綜合分數", "勝率", "平均名次"])
             self.run_batch_button = QPushButton("執行多輪模擬")
@@ -375,6 +378,8 @@ def run() -> int:
             controls.addWidget(QLabel("Seed"))
             controls.addWidget(self.seed_mode)
             controls.addWidget(self.seed_input)
+            controls.addWidget(QLabel("CPU worker"))
+            controls.addWidget(self.worker_count)
             controls.addWidget(QLabel("排序"))
             controls.addWidget(self.sort_mode)
             controls.addWidget(self.run_batch_button)
@@ -514,11 +519,12 @@ def run() -> int:
                 config = self.selected_config()
                 mode = self.selected_seed_mode()
                 seed = self.fixed_seed_value() if mode is SeedMode.FIXED else None
+                workers = self.selected_workers()
             except ValueError as exc:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             runs = self.run_count.value()
-            sample_runs, estimate_seconds, worker_count = self.estimate_batch(config, runs, seed)
+            sample_runs, estimate_seconds, worker_count = self.estimate_batch(config, runs, seed, workers)
             QMessageBox.information(
                 self,
                 "多輪模擬預估",
@@ -529,7 +535,7 @@ def run() -> int:
             self.batch_running = True
             self.reset_batch_progress(total=runs)
             self.apply_control_state()
-            self.worker = SimulationWorker(config, runs, seed, mode, workers="auto")
+            self.worker = SimulationWorker(config, runs, seed, mode, workers=workers)
             self.worker.finished_with_result.connect(self.render_results)
             self.worker.cancelled_with_result.connect(self.handle_batch_cancelled)
             self.worker.progress_changed.connect(self.update_batch_progress)
@@ -593,13 +599,19 @@ def run() -> int:
             self.batch_progress.setFormat(f"0 / {maximum if total else 0}")
             self.batch_eta.setText("ETA：-")
 
-        def estimate_batch(self, config: RaceConfig, runs: int, seed: int | None) -> tuple[int, float, int]:
+        def estimate_batch(
+            self,
+            config: RaceConfig,
+            runs: int,
+            seed: int | None,
+            workers: int | str | None,
+        ) -> tuple[int, float, int]:
             sample_runs = estimate_sample_runs(runs)
             sample_seed = seed if seed is not None else config.seed or 0
             started_at = time.perf_counter()
             run_batch_simulation(config, runs=sample_runs, seed=sample_seed, seed_mode=SeedMode.FIXED, workers=1)
             elapsed = time.perf_counter() - started_at
-            worker_count = resolve_worker_count("auto", runs=runs)
+            worker_count = resolve_worker_count(workers, runs=runs)
             sequential_estimate = estimate_seconds_from_sample(
                 elapsed_seconds=elapsed,
                 sample_runs=sample_runs,
@@ -623,6 +635,7 @@ def run() -> int:
             self.run_count.setEnabled(batch_controls_enabled)
             self.seed_mode.setEnabled(batch_controls_enabled)
             self.seed_input.setEnabled(batch_controls_enabled)
+            self.worker_count.setEnabled(batch_controls_enabled)
             self.run_batch_button.setEnabled(batch_controls_enabled)
             self.stop_batch_button.setEnabled(self.batch_running)
             self.sort_mode.setEnabled(True)
@@ -644,6 +657,15 @@ def run() -> int:
         def selected_seed_mode(self) -> SeedMode:
             return SeedMode(self.seed_mode.currentData())
 
+        def selected_workers(self) -> str:
+            return str(self.worker_count.currentData())
+
+        def populate_worker_options(self) -> None:
+            self.worker_count.addItem("自動", "auto")
+            max_workers = max(1, os.cpu_count() or 1)
+            for count in range(1, max_workers + 1):
+                self.worker_count.addItem(str(count), str(count))
+
         def fixed_seed_value(self) -> int:
             raw_seed = self.seed_input.text().strip()
             if not raw_seed:
@@ -661,6 +683,7 @@ def run() -> int:
             self.run_count.setValue(self.user_settings.batch_simulation.runs)
             self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
+            self.set_combo_current_data(self.worker_count, self.user_settings.batch_simulation.workers)
             self.set_combo_current_text(self.sort_mode, self.user_settings.batch_simulation.sort_mode)
 
         def connect_settings_persistence(self) -> None:
@@ -668,6 +691,7 @@ def run() -> int:
             self.run_count.valueChanged.connect(self.persist_user_settings)
             self.seed_mode.currentIndexChanged.connect(self.persist_user_settings)
             self.seed_input.textChanged.connect(self.persist_user_settings)
+            self.worker_count.currentIndexChanged.connect(self.persist_user_settings)
             self.sort_mode.currentIndexChanged.connect(self.persist_user_settings)
 
         def current_user_settings(self) -> UserSettings:
@@ -685,6 +709,7 @@ def run() -> int:
                     seed_mode=str(self.seed_mode.currentData()),
                     seed=self.seed_input.text().strip(),
                     sort_mode=self.sort_mode.currentText(),
+                    workers=str(self.worker_count.currentData()),
                 ),
             )
 

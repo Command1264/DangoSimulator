@@ -15,6 +15,7 @@ MIN_BATCH_RUNS = 1
 MAX_BATCH_RUNS = 99_999_999
 SORT_MODES = ("綜合分數", "勝率", "平均名次")
 SEED_MODES = ("fixed", "system")
+MAX_WORKERS = 256
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class BatchSimulationSettings:
     seed_mode: str = "fixed"
     seed: str = "20260517"
     sort_mode: str = "綜合分數"
+    workers: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,7 @@ def _settings_from_payload(payload: dict[str, Any]) -> UserSettings:
             seed_mode=_choice(batch_simulation.get("seed_mode"), SEED_MODES, "fixed"),
             seed=str(batch_simulation.get("seed", "20260517")),
             sort_mode=_choice(batch_simulation.get("sort_mode"), SORT_MODES, "綜合分數"),
+            workers=_worker_setting(batch_simulation.get("workers")),
         ),
     )
 
@@ -160,3 +163,15 @@ def _bounded_int(value: Any, minimum: int, maximum: int, default: int) -> int:
 def _choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
     text = str(value)
     return text if text in allowed else default
+
+
+def _worker_setting(value: Any) -> str:
+    if value == "auto":
+        return "auto"
+    try:
+        workers = int(value)
+    except (TypeError, ValueError):
+        return "auto"
+    if workers < 1:
+        return "auto"
+    return str(min(workers, MAX_WORKERS))

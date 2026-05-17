@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -30,6 +31,24 @@ def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["DANGOSIM_GUI_SMOKE"] = "1"
     settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "綜合分數",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
 
     result = subprocess.run(
@@ -44,3 +63,5 @@ def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert settings_path.exists()
+    saved = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert saved["batch_simulation"]["workers"] == "1"
