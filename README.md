@@ -32,3 +32,7 @@ CLI 與 GUI 支援兩種 seed 模式：
 - 系統隨機 seed：使用 Python `secrets.randbits(64)` 產生本次 seed，並在 GUI 顯示/回填，或在 CLI JSON/CSV 輸出中記錄實際 seed。
 
 Python 會透過作業系統安全隨機來源取得 entropy；標準函式庫不保證直接使用 CPU 熱噪聲。
+
+## 授權
+
+本專案使用 MIT License 開源。
