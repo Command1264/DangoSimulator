@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from collections.abc import Iterable
 
+from dangosim.core.boss_rules import should_boss_return_to_finish
 from dangosim.core.models import DeviceType, EventRecord, MoveResult, RaceConfig, RaceSnapshot
 
 
@@ -149,22 +150,26 @@ class RaceSimulator:
     def _finish_round(self) -> None:
         if self._round_number < 3:
             return
-        last_regular_position = self._last_regular_position()
-        if last_regular_position is None:
+        regular_positions = self._regular_positions()
+        if not regular_positions:
             return
         for boss_id, boss in self._dangos.items():
             if not boss.is_boss or boss_id in self._rankings:
                 continue
-            if self._positions[boss_id] != last_regular_position:
+            if should_boss_return_to_finish(
+                boss_position=self._positions[boss_id],
+                finish=self.config.track.finish,
+                length=self.config.track.length,
+                regular_positions=regular_positions,
+            ):
                 self._return_boss_to_finish(boss_id)
 
-    def _last_regular_position(self) -> int | None:
-        regular_positions = [
+    def _regular_positions(self) -> tuple[int, ...]:
+        return tuple(
             position
             for dango_id, position in self._positions.items()
             if not self._dangos[dango_id].is_boss and dango_id not in self._rankings
-        ]
-        return min(regular_positions) if regular_positions else None
+        )
 
     def _return_boss_to_finish(self, boss_id: str) -> None:
         finish = self.config.track.finish
@@ -176,7 +181,7 @@ class RaceSimulator:
         self._event_log.append(
             EventRecord(
                 event_type="boss_return",
-                message=f"{self._dangos[boss_id].name} 與最後一名分開，傳送回終點。",
+                message=f"{self._dangos[boss_id].name} 前進方向到終點間已無團子，傳送回終點。",
                 data={"dango_id": boss_id, "from_position": old_position, "to_position": finish},
             )
         )

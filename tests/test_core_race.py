@@ -153,6 +153,12 @@ def test_boss_enters_action_order_from_round_three() -> None:
 
     assert "boss" not in first_two_rounds
     assert "boss" in third_round
+    round_events = [
+        event for event in simulator.snapshot().event_log if event.event_type == "round_start"
+    ]
+    assert "boss" not in round_events[0].data["order"]
+    assert "boss" not in round_events[1].data["order"]
+    assert "boss" in round_events[2].data["order"]
 
 
 def test_boss_is_always_bottom_and_moves_without_carrying_regular_dangos() -> None:
@@ -178,21 +184,43 @@ def test_boss_is_always_bottom_and_moves_without_carrying_regular_dangos() -> No
     assert moved.stacks[5] == ["a"]
 
 
-def test_boss_returns_to_finish_after_round_when_separated_from_last_place() -> None:
+def test_boss_returns_to_finish_after_round_when_no_regular_remains_ahead_before_finish() -> None:
     simulator = RaceSimulator(
         RaceConfig(
-            track=TrackConfig(length=100, finish=100),
+            track=TrackConfig(length=12, finish=12),
             dangos=[
-                DangoConfig(id="a", name="A", start_position=1),
-                DangoConfig(id="boss", name="布大王", start_position=100, is_boss=True, ranked=False),
+                DangoConfig(id="a", name="A", start_position=9),
+                DangoConfig(id="boss", name="布大王", start_position=12, is_boss=True, ranked=False),
             ],
             seed=4,
         )
     )
 
-    for _ in range(4):
-        simulator.step_next()
+    simulator.step_dango("boss", 4)
+    simulator._round_number = 3
+    simulator._finish_round()
 
     snapshot = simulator.snapshot()
-    assert snapshot.positions["boss"] == 100
+    assert snapshot.positions["boss"] == 12
     assert snapshot.event_log[-1].event_type == "boss_return"
+
+
+def test_boss_stays_when_regular_remains_ahead_before_finish_in_boss_direction() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=12, finish=12),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=6),
+                DangoConfig(id="boss", name="布大王", start_position=12, is_boss=True, ranked=False),
+            ],
+            seed=4,
+        )
+    )
+
+    simulator.step_dango("boss", 4)
+    simulator._round_number = 3
+    simulator._finish_round()
+
+    snapshot = simulator.snapshot()
+    assert snapshot.positions["boss"] == 8
+    assert all(event.event_type != "boss_return" for event in snapshot.event_log)

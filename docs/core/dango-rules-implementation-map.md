@@ -44,13 +44,13 @@
 
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
-| 第 3 回合開始從終點向起點移動 | `_can_act_in_round()` / `_forward_delta()` | 已實作 |
+| 第 1、2 回合一般團子先行動，第 3 回合開始從終點向起點移動 | `_can_act_in_round()` / `_forward_delta()` | 已實作 |
 | 行動時賽道機制對布大王生效 | `_apply_device()` | 已實作 |
 | 布大王骰 1-6 | `_roll_for()` | 已實作 |
 | 推進/阻遏對布大王效果反轉 | `_apply_device()` | 已實作 |
 | 永遠處於堆疊底部 | `_place_group()` | 已實作 |
 | 行動時不帶走一般團子 | `_take_moving_group()` | 已實作 |
-| 整輪結束後，若與最後一名分開，傳送回終點 | `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
+| 整輪結束後，若布大王前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
 
 ## 團子技能
 
