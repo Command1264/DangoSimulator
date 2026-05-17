@@ -26,13 +26,13 @@ def test_estimate_seconds_from_sample_scales_linearly() -> None:
 
 def test_batch_estimate_confirmation_message_asks_before_starting() -> None:
     message = build_batch_estimate_confirmation_message(
-        sample_runs=10,
-        worker_count=4,
-        total_runs=1000,
+        sample_runs=10000,
+        worker_count=16,
+        total_runs=99999999,
         duration_text="20 秒",
     )
 
-    assert "已先試跑 10 場。" in message
-    assert "正式模擬會使用 4 個 worker。" in message
-    assert "預估 1000 場約需 20 秒。" in message
+    assert "已先試跑 10,000 場。" in message
+    assert "正式模擬會使用 16 個 worker。" in message
+    assert "預估 99,999,999 場約需 20 秒。" in message
     assert "是否開始正式模擬？" in message

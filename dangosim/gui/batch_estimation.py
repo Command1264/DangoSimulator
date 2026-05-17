@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dangosim.gui.number_formatting import format_grouped_int
+
 MIN_SAMPLE_RUNS = 10
 MAX_SAMPLE_RUNS = 200
 LARGE_BATCH_DIVISOR = 1000
@@ -32,8 +34,8 @@ def build_batch_estimate_confirmation_message(
     duration_text: str,
 ) -> str:
     return (
-        f"已先試跑 {sample_runs} 場。\n"
-        f"正式模擬會使用 {worker_count} 個 worker。\n"
-        f"預估 {total_runs} 場約需 {duration_text}。\n\n"
+        f"已先試跑 {format_grouped_int(sample_runs)} 場。\n"
+        f"正式模擬會使用 {format_grouped_int(worker_count)} 個 worker。\n"
+        f"預估 {format_grouped_int(total_runs)} 場約需 {duration_text}。\n\n"
         "是否開始正式模擬？"
     )

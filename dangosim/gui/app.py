@@ -16,6 +16,12 @@ from dangosim.gui.batch_estimation import (
     estimate_seconds_from_sample,
 )
 from dangosim.gui.layers import build_piece_layers
+from dangosim.gui.number_formatting import (
+    apply_group_separator_delete,
+    format_grouped_int,
+    normalize_grouped_int_text,
+    parse_grouped_int,
+)
 from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
 from dangosim.gui.settings import (
     BatchSimulationSettings,
@@ -46,7 +52,7 @@ def run() -> int:
     multiprocessing.freeze_support()
     try:
         from PySide6.QtCore import QThread, QTimer, Qt, Signal
-        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
+        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QValidator
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -88,6 +94,78 @@ def run() -> int:
         "#decf3f",
         "#7e62c9",
     ]
+
+    class GroupedIntegerSpinBox(QSpinBox):
+        def __init__(self) -> None:
+            super().__init__()
+            self._updating_grouped_text = False
+            self.setKeyboardTracking(True)
+            self.lineEdit().textEdited.connect(self._format_edited_text)
+
+        def textFromValue(self, value: int) -> str:
+            return format_grouped_int(value)
+
+        def valueFromText(self, text: str) -> int:
+            return parse_grouped_int(text, default=self.minimum())
+
+        def validate(self, text: str, position: int) -> tuple[QValidator.State, str, int]:
+            digits = "".join(character for character in text if character.isdigit())
+            if not digits:
+                return (QValidator.State.Intermediate, text, position)
+            if any(character not in "0123456789," for character in text):
+                return (QValidator.State.Invalid, text, position)
+            value = int(digits)
+            if self.minimum() <= value <= self.maximum():
+                return (QValidator.State.Acceptable, text, position)
+            return (QValidator.State.Intermediate, text, position)
+
+        def keyPressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+            line_edit = self.lineEdit()
+            if not line_edit.hasSelectedText() and event.key() in {
+                Qt.Key.Key_Backspace,
+                Qt.Key.Key_Delete,
+            }:
+                key = "backspace" if event.key() == Qt.Key.Key_Backspace else "delete"
+                edit = apply_group_separator_delete(
+                    line_edit.text(),
+                    cursor_position=line_edit.cursorPosition(),
+                    key=key,
+                )
+                if edit is not None:
+                    self._apply_normalized_text(
+                        normalize_grouped_int_text(
+                            edit.text,
+                            cursor_position=0,
+                            minimum=self.minimum(),
+                            maximum=self.maximum(),
+                            digit_cursor=edit.digit_cursor,
+                        )
+                    )
+                    event.accept()
+                    return
+            super().keyPressEvent(event)
+
+        def _format_edited_text(self, text: str) -> None:
+            if self._updating_grouped_text:
+                return
+            self._apply_normalized_text(
+                normalize_grouped_int_text(
+                    text,
+                    cursor_position=self.lineEdit().cursorPosition(),
+                    minimum=self.minimum(),
+                    maximum=self.maximum(),
+                )
+            )
+
+        def _apply_normalized_text(self, normalized) -> None:  # type: ignore[no-untyped-def]
+            self._updating_grouped_text = True
+            try:
+                if normalized.value != self.value():
+                    self.setValue(normalized.value)
+                self.lineEdit().setText(normalized.text)
+                self.lineEdit().setCursorPosition(normalized.cursor_position)
+            finally:
+                self._updating_grouped_text = False
 
     def piece_color(dango_id: str, state: RaceViewState) -> str:
         if dango_id == "boss":
@@ -363,11 +441,10 @@ def run() -> int:
             box = QGroupBox("多輪模擬")
             layout = QVBoxLayout(box)
             controls = QHBoxLayout()
-            self.run_count = QSpinBox()
+            self.run_count = GroupedIntegerSpinBox()
             self.run_count.setRange(1, MAX_BATCH_RUNS)
             self.run_count.setValue(1000)
-            self.run_count.setGroupSeparatorShown(True)
-            self.run_count.setMinimumWidth(125)
+            self.run_count.setMinimumWidth(145)
             self.seed_mode = QComboBox()
             self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
             self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
