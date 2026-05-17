@@ -10,6 +10,14 @@ from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
 from dangosim.gui.layers import build_piece_layers
 from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
+from dangosim.gui.settings import (
+    BatchSimulationSettings,
+    ParticipantSettings,
+    SingleRaceSettings,
+    UserSettings,
+    UserSettingsStore,
+    apply_settings_to_cards,
+)
 from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
@@ -222,8 +230,11 @@ def run() -> int:
             self.setWindowTitle(APP_TITLE)
             self.config_path = resource_path("data/default_race.json")
             self.base_config = load_race_config(self.config_path.read_text(encoding="utf-8"))
+            self.settings_store = UserSettingsStore.default()
+            self.user_settings = self.settings_store.load()
+            self.loading_settings = True
             self.active_config = self.base_config
-            self.cards = build_participant_cards(self.base_config)
+            self.cards = apply_settings_to_cards(build_participant_cards(self.base_config), self.user_settings)
             self.card_widgets: list[ParticipantCard] = []
             self.controller: GuiRaceController | None = None
             self.worker: SimulationWorker | None = None
@@ -250,8 +261,12 @@ def run() -> int:
             root_layout.addWidget(self._build_results_panel())
             self.setCentralWidget(root)
 
+            self.apply_loaded_settings_to_controls()
             self.refresh_selected_summary()
             self.reset_race()
+            self.loading_settings = False
+            self.connect_settings_persistence()
+            self.persist_user_settings()
 
         def _build_left_panel(self) -> QWidget:
             panel = QWidget()
@@ -371,6 +386,7 @@ def run() -> int:
         def _sync_cards_from_widgets(self) -> None:
             self.cards = [widget.state for widget in self.card_widgets]
             self.refresh_selected_summary()
+            self.persist_user_settings()
 
         def selected_config(self) -> RaceConfig:
             return build_race_config_from_cards(self.base_config, self.cards)
@@ -614,6 +630,61 @@ def run() -> int:
             if seed < 0 or seed >= MAX_SEED_EXCLUSIVE:
                 raise ValueError(f"固定 seed 必須介於 0 到 {MAX_SEED_EXCLUSIVE - 1}。")
             return seed
+
+        def apply_loaded_settings_to_controls(self) -> None:
+            self.speed.setValue(self.user_settings.single_race.speed_ms)
+            self.run_count.setValue(self.user_settings.batch_simulation.runs)
+            self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
+            self.seed_input.setText(self.user_settings.batch_simulation.seed)
+            self.set_combo_current_text(self.sort_mode, self.user_settings.batch_simulation.sort_mode)
+
+        def connect_settings_persistence(self) -> None:
+            self.speed.valueChanged.connect(self.persist_user_settings)
+            self.run_count.valueChanged.connect(self.persist_user_settings)
+            self.seed_mode.currentIndexChanged.connect(self.persist_user_settings)
+            self.seed_input.textChanged.connect(self.persist_user_settings)
+            self.sort_mode.currentIndexChanged.connect(self.persist_user_settings)
+
+        def current_user_settings(self) -> UserSettings:
+            selected_ids = tuple(card.dango_id for card in self.cards if card.selected and not card.is_boss)
+            boss_card = next((card for card in self.cards if card.is_boss), None)
+            boss_mode = (boss_card.boss_mode if boss_card is not None else BossMode.DISRUPTOR).value
+            return UserSettings(
+                participants=ParticipantSettings(
+                    selected_dango_ids=selected_ids,
+                    boss_mode=boss_mode,
+                ),
+                single_race=SingleRaceSettings(speed_ms=self.speed.value()),
+                batch_simulation=BatchSimulationSettings(
+                    runs=self.run_count.value(),
+                    seed_mode=str(self.seed_mode.currentData()),
+                    seed=self.seed_input.text().strip(),
+                    sort_mode=self.sort_mode.currentText(),
+                ),
+            )
+
+        def persist_user_settings(self, *_args) -> None:
+            if self.loading_settings:
+                return
+            self.user_settings = self.current_user_settings()
+            try:
+                self.settings_store.save(self.user_settings)
+            except OSError as exc:
+                self.statusBar().showMessage(f"設定儲存失敗：{exc}", 5000)
+
+        def set_combo_current_data(self, combo: QComboBox, value: str) -> None:
+            index = combo.findData(value)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+        def set_combo_current_text(self, combo: QComboBox, value: str) -> None:
+            index = combo.findText(value)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+        def closeEvent(self, event) -> None:
+            self.persist_user_settings()
+            super().closeEvent(event)
 
     app = QApplication([])
     window = MainWindow()

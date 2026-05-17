@@ -25,10 +25,12 @@ def test_pyinstaller_spec_includes_data_directory() -> None:
     assert "dangosim.gui.app" in content
 
 
-def test_gui_dashboard_can_create_window_offscreen() -> None:
+def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["DANGOSIM_GUI_SMOKE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
 
     result = subprocess.run(
         [sys.executable, "-m", "dangosim.gui.app"],
@@ -41,3 +43,4 @@ def test_gui_dashboard_can_create_window_offscreen() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+    assert settings_path.exists()
