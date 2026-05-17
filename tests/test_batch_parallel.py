@@ -8,6 +8,7 @@ import pytest
 from dangosim.cli.main import main
 from dangosim.core.batch import resolve_worker_count, simulate_many
 from dangosim.core.config_loader import load_race_config
+from dangosim.core.models import DangoConfig, RaceConfig, TrackConfig
 from dangosim.randomness import SeedMode
 
 
@@ -64,6 +65,28 @@ def test_parallel_simulate_many_can_cancel_before_scheduling_work() -> None:
 
     assert result["completed_runs"] == 0
     assert result["cancelled"] is True
+
+
+def test_simulate_many_counts_ranked_boss_last_when_race_finishes_before_boss_can_act() -> None:
+    result = simulate_many(
+        RaceConfig(
+            track=TrackConfig(length=10, finish=10),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=8),
+                DangoConfig(id="boss", name="布大王", start_position=10, is_boss=True, ranked=True),
+            ],
+            boss_ranked=True,
+            seed=7,
+        ),
+        runs=1,
+        seed=7,
+        seed_mode=SeedMode.FIXED,
+        workers=1,
+    )
+
+    rows = {str(item["dango_id"]): item for item in result["results"]}  # type: ignore[index]
+    assert rows["a"]["average_rank"] == 1
+    assert rows["boss"]["average_rank"] == 2
 
 
 def test_resolve_worker_count_accepts_auto_full_and_positive_integer(monkeypatch: pytest.MonkeyPatch) -> None:

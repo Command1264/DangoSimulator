@@ -463,7 +463,7 @@ class RaceSimulator:
     def _is_ranked_participant(self, dango_id: str) -> bool:
         dango = self._dangos[dango_id]
         if dango.is_boss:
-            return self.config.boss_ranked
+            return self.config.boss_ranked and self._can_act_in_round(dango_id, self._round_number)
         return dango.ranked
 
     def _live_rankings(self) -> tuple[str, ...]:

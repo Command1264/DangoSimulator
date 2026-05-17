@@ -264,3 +264,50 @@ def test_regular_dangos_roll_only_one_to_three() -> None:
 
     assert regular_rolls
     assert all(1 <= roll <= 3 for roll in regular_rolls)
+
+
+def test_ranked_boss_is_hidden_from_live_rankings_until_round_three() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=100, finish=100),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=1),
+                DangoConfig(id="boss", name="布大王", start_position=100, is_boss=True, ranked=True),
+            ],
+            boss_ranked=True,
+            seed=11,
+        )
+    )
+
+    assert "boss" not in simulator.snapshot().live_rankings
+
+    for _ in range(4):
+        simulator.step_next()
+
+    assert simulator.snapshot().round_number == 2
+    assert "boss" not in simulator.snapshot().live_rankings
+
+    simulator.step_next()
+
+    assert simulator.snapshot().round_number == 3
+    assert "boss" in simulator.snapshot().live_rankings
+
+
+def test_ranked_boss_is_excluded_from_finish_rankings_before_round_three() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=10, finish=10),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=8),
+                DangoConfig(id="boss", name="布大王", start_position=10, is_boss=True, ranked=True),
+            ],
+            boss_ranked=True,
+            seed=3,
+        )
+    )
+
+    simulator.step_dango("a", 2)
+
+    assert simulator.snapshot().finished is True
+    assert simulator.snapshot().rankings == ("a",)

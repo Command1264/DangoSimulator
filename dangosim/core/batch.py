@@ -120,7 +120,7 @@ def _simulate_many_sequential(
             break
         run_seed = _base_seed(config, seed) + index
         snapshot = RaceSimulator(replace(config, seed=run_seed)).run_until_finished()
-        _aggregate_rankings(snapshot.rankings, wins=wins, rank_totals=rank_totals)
+        _aggregate_rankings(snapshot.rankings, ranked_ids=ranked_ids, wins=wins, rank_totals=rank_totals)
         completed_runs += 1
         if progress_callback is not None:
             progress_callback(completed_runs, runs)
@@ -224,7 +224,7 @@ def _run_chunk(request: _ChunkRequest) -> _ChunkResult:
     for offset in range(request.runs):
         run_seed = request.base_seed + request.start_index + offset
         snapshot = RaceSimulator(replace(config, seed=run_seed)).run_until_finished()
-        _aggregate_rankings(snapshot.rankings, wins=wins, rank_totals=rank_totals)
+        _aggregate_rankings(snapshot.rankings, ranked_ids=ranked_ids, wins=wins, rank_totals=rank_totals)
 
     return _ChunkResult(completed_runs=request.runs, wins=wins, rank_totals=rank_totals)
 
@@ -303,13 +303,23 @@ def _ranked_ids(config: RaceConfig) -> list[str]:
 def _aggregate_rankings(
     rankings: tuple[str, ...],
     *,
+    ranked_ids: list[str],
     wins: dict[str, int],
     rank_totals: dict[str, int],
 ) -> None:
     if rankings:
         wins[rankings[0]] += 1
+    seen: set[str] = set()
     for rank_index, dango_id in enumerate(rankings, start=1):
+        if dango_id not in rank_totals:
+            continue
         rank_totals[dango_id] += rank_index
+        seen.add(dango_id)
+    next_rank = len(seen) + 1
+    for dango_id in ranked_ids:
+        if dango_id not in seen:
+            rank_totals[dango_id] += next_rank
+            next_rank += 1
 
 
 def _merge_counts(target: dict[str, int], source: dict[str, int]) -> None:
