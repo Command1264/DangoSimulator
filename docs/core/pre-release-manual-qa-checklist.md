@@ -28,6 +28,9 @@
 - [ ] 重置後會回到初始控制狀態。
 - [ ] 可執行批次模擬並看到勝率摘要。
 - [ ] 多輪模擬場數欄位可輸入到 99999999，欄位寬度可容納 `9999,9999` 等級文字。
+- [ ] CPU worker 選項包含自動、全力與 1 到目前 CPU core 數。
+- [ ] CPU worker 自動模式使用約 2/3 CPU core，全力模式使用目前 CPU core 數。
+- [ ] 載入較高核心電腦儲存的過大 CPU worker 數時，GUI 會回退到自動。
 - [ ] 多輪模擬執行前會依場數試跑樣本場數，並顯示正式 worker 數與預估時間。
 - [ ] 多輪模擬執行中會顯示完成場數、總場數與 ETA。
 - [ ] 多輪模擬執行中場數、Seed 模式、Seed 輸入、CPU worker 與執行按鈕不可操作，停止模擬可操作。
@@ -43,6 +46,7 @@
 
 - [ ] `dangosim simulate` 可讀取預設資料。
 - [ ] `dangosim simulate --workers auto` 可完成多核心批次模擬。
+- [ ] `dangosim simulate --workers full` 可完成多核心批次模擬。
 - [ ] 預設資料可套用團子 builtin 技能並完成批次模擬。
 - [ ] 固定 seed 的輸出可重現。
 - [ ] 同一固定 seed 使用 `--workers 1` 與 `--workers auto` 會產生相同統計結果。

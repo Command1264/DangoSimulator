@@ -40,19 +40,30 @@ class _ChunkResult:
 
 
 def resolve_worker_count(workers: int | str | None, *, runs: int) -> int:
+    cpu_count = _available_worker_count()
     if workers is None or workers == "auto":
-        requested = os.cpu_count() or 1
+        requested = _automatic_worker_count(cpu_count)
+    elif workers == "full":
+        requested = cpu_count
     elif isinstance(workers, str):
         try:
             requested = int(workers)
         except ValueError as exc:
-            raise ValueError("--workers must be 'auto' or a positive integer.") from exc
+            raise ValueError("--workers must be 'auto', 'full', or a positive integer.") from exc
     else:
         requested = workers
 
     if requested < 1:
         raise ValueError("--workers must be at least 1.")
-    return min(requested, max(1, runs))
+    return min(requested, cpu_count, max(1, runs))
+
+
+def _available_worker_count() -> int:
+    return max(1, os.cpu_count() or 1)
+
+
+def _automatic_worker_count(cpu_count: int) -> int:
+    return max(1, (cpu_count * 2) // 3)
 
 
 def simulate_many(

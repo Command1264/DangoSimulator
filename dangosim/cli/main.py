@@ -33,7 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
     simulate.add_argument("--runs", type=int, default=1000, help="模擬場數")
     simulate.add_argument("--seed", type=int, default=None, help="固定隨機種子")
     simulate.add_argument("--seed-mode", choices=[mode.value for mode in SeedMode], default=SeedMode.FIXED.value, help="seed 模式")
-    simulate.add_argument("--workers", default="1", help="平行處理數量，使用 auto 或正整數")
+    simulate.add_argument("--workers", default="1", help="平行處理數量，使用 auto、full 或正整數")
     simulate.add_argument("--out", required=True, help="輸出檔案")
     simulate.add_argument("--format", choices=["json", "csv"], default="json", help="輸出格式")
     return parser

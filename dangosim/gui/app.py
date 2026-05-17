@@ -686,6 +686,7 @@ def run() -> int:
 
         def populate_worker_options(self) -> None:
             self.worker_count.addItem("自動", "auto")
+            self.worker_count.addItem("全力", "full")
             max_workers = max(1, os.cpu_count() or 1)
             for count in range(1, max_workers + 1):
                 self.worker_count.addItem(str(count), str(count))

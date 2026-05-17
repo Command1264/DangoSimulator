@@ -18,6 +18,8 @@ GUI 與 CLI 都必須透過 core 的 public API 執行模擬，不能各自重�
 
 - 單 worker 模式保留逐場進度回報與取消檢查。
 - 多 worker 模式使用 `ProcessPoolExecutor` 分 chunk 執行，以利用 CPU 多核心。
+- `auto` worker 使用約 2/3 CPU core，`full` worker 使用目前全部 CPU core；實際 worker 仍不得超過模擬場數。
+- 指定 worker 數會在 core 層限制到目前 CPU core 數，避免設定檔或 CLI 輸入造成過度開程序。
 - 固定 seed 以 `base_seed + 場次索引` 派生每場 seed，因此同一批設定在不同 worker 數下仍需產生一致統計。
 - GUI 只負責背景執行緒與狀態展示；實際批次聚合由 core 完成。
 

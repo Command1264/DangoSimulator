@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from dangosim.cli.main import main
 from dangosim.core.batch import resolve_worker_count, simulate_many
 from dangosim.core.config_loader import load_race_config
@@ -64,10 +66,20 @@ def test_parallel_simulate_many_can_cancel_before_scheduling_work() -> None:
     assert result["cancelled"] is True
 
 
-def test_resolve_worker_count_accepts_auto_and_positive_integer() -> None:
+def test_resolve_worker_count_accepts_auto_full_and_positive_integer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("dangosim.core.batch.os.cpu_count", lambda: 12)
+
     assert resolve_worker_count(1, runs=100) == 1
-    assert resolve_worker_count("auto", runs=100) >= 1
+    assert resolve_worker_count("auto", runs=100) == 8
+    assert resolve_worker_count("full", runs=100) == 12
     assert resolve_worker_count("2", runs=100) == 2
+
+
+def test_resolve_worker_count_never_exceeds_cpu_count_or_run_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("dangosim.core.batch.os.cpu_count", lambda: 8)
+
+    assert resolve_worker_count("99", runs=100) == 8
+    assert resolve_worker_count("full", runs=3) == 3
 
 
 def test_cli_workers_option_keeps_fixed_seed_results_reproducible(tmp_path: Path) -> None:

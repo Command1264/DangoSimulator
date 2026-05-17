@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from dangosim.core.config_loader import load_race_config
 from dangosim.gui.settings import (
     BatchSimulationSettings,
@@ -51,7 +53,8 @@ def test_user_settings_loads_defaults_for_missing_or_invalid_file(tmp_path: Path
     assert UserSettingsStore(invalid_path).load() == UserSettings()
 
 
-def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
+def test_user_settings_validates_bounds_and_enums(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("dangosim.gui.settings.os.cpu_count", lambda: 4)
     settings_path = tmp_path / "settings.json"
     settings_path.write_text(
         """
@@ -67,7 +70,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
             "seed_mode": "bad",
             "seed": 123,
             "sort_mode": "bad",
-            "workers": "bad"
+            "workers": "8"
           }
         }
         """,
@@ -85,6 +88,23 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
     assert settings.batch_simulation.seed == "123"
     assert settings.batch_simulation.sort_mode == "綜合分數"
     assert settings.batch_simulation.workers == "auto"
+
+
+def test_user_settings_accepts_full_worker_mode(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        """
+        {
+          "version": 1,
+          "batch_simulation": { "workers": "full" }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    settings = UserSettingsStore(settings_path).load()
+
+    assert settings.batch_simulation.workers == "full"
 
 
 def test_apply_settings_to_cards_restores_participants_and_boss_mode() -> None:

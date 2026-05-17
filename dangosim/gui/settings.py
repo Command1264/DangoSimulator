@@ -15,7 +15,6 @@ MIN_BATCH_RUNS = 1
 MAX_BATCH_RUNS = 99_999_999
 SORT_MODES = ("綜合分數", "勝率", "平均名次")
 SEED_MODES = ("fixed", "system")
-MAX_WORKERS = 256
 
 
 @dataclass(frozen=True)
@@ -172,12 +171,16 @@ def _bool_value(value: Any, default: bool) -> bool:
 
 
 def _worker_setting(value: Any) -> str:
-    if value == "auto":
-        return "auto"
+    if value in {"auto", "full"}:
+        return str(value)
     try:
         workers = int(value)
     except (TypeError, ValueError):
         return "auto"
-    if workers < 1:
+    if workers < 1 or workers > _available_worker_count():
         return "auto"
-    return str(min(workers, MAX_WORKERS))
+    return str(workers)
+
+
+def _available_worker_count() -> int:
+    return max(1, os.cpu_count() or 1)
