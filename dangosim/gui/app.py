@@ -28,6 +28,7 @@ from dangosim.gui.view_models import (
     RaceViewState,
     build_participant_cards,
     build_race_config_from_cards,
+    format_event_log_message,
 )
 from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
@@ -313,15 +314,16 @@ def run() -> int:
             controls = QHBoxLayout()
             self.start_button = QPushButton("開始")
             self.step_button = QPushButton("下一步")
-            self.auto_button = QPushButton("自動播放")
+            self.auto_play = QCheckBox("自動播放")
             self.pause_button = QPushButton("暫停")
             self.reset_button = QPushButton("重置")
             self.speed = QSpinBox()
             self.speed.setRange(150, 2000)
             self.speed.setValue(700)
             self.speed.setSuffix(" ms")
-            for button in [self.start_button, self.step_button, self.auto_button, self.pause_button, self.reset_button]:
+            for button in [self.start_button, self.step_button, self.pause_button, self.reset_button]:
                 controls.addWidget(button)
+            controls.addWidget(self.auto_play)
             controls.addWidget(QLabel("速度"))
             controls.addWidget(self.speed)
             layout.addLayout(controls)
@@ -335,7 +337,7 @@ def run() -> int:
 
             self.start_button.clicked.connect(self.start_race)
             self.step_button.clicked.connect(self.step_race)
-            self.auto_button.clicked.connect(self.start_auto)
+            self.auto_play.stateChanged.connect(self.handle_auto_play_changed)
             self.pause_button.clicked.connect(self.pause_auto)
             self.reset_button.clicked.connect(self.reset_race)
             return panel
@@ -423,9 +425,10 @@ def run() -> int:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             self.single_race_active = True
-            self.pause_auto()
+            self.stop_auto_timer()
             self.render_state(self.controller.view_state())
             self.apply_control_state()
+            self.start_auto_if_checked()
 
         def reset_race(self) -> None:
             try:
@@ -434,7 +437,7 @@ def run() -> int:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             self.single_race_active = False
-            self.pause_auto()
+            self.stop_auto_timer()
             self.render_state(self.controller.view_state())
             self.reset_batch_progress()
             self.apply_control_state()
@@ -459,7 +462,11 @@ def run() -> int:
             state = self.controller.step()
             self.render_state(state)
             if state.finished:
-                self.pause_auto()
+                self.stop_auto_timer()
+
+        def start_auto_if_checked(self) -> None:
+            if self.auto_play.isChecked():
+                self.start_auto()
 
         def start_auto(self) -> None:
             if not self.single_race_active:
@@ -467,7 +474,18 @@ def run() -> int:
             self.auto_timer.start(self.speed.value())
 
         def pause_auto(self) -> None:
+            self.auto_play.setChecked(False)
+            self.stop_auto_timer()
+
+        def stop_auto_timer(self) -> None:
             self.auto_timer.stop()
+
+        def handle_auto_play_changed(self, *_args) -> None:
+            if self.auto_play.isChecked():
+                self.start_auto()
+            else:
+                self.stop_auto_timer()
+            self.persist_user_settings()
 
         def render_state(self, state: RaceViewState) -> None:
             self.track_scene.render_state(self.active_config, state)
@@ -488,7 +506,7 @@ def run() -> int:
                 self.ranking.addItem(item)
             self.events.clear()
             for message in state.event_log[-80:]:
-                self.events.addItem(message)
+                self.events.addItem(format_event_log_message(message))
 
         def piece_icon(self, dango_id: str, state: RaceViewState) -> QIcon:
             pixmap = QPixmap(26, 26)
@@ -626,7 +644,7 @@ def run() -> int:
 
             self.start_button.setEnabled(not simulation_active)
             self.step_button.setEnabled(self.single_race_active)
-            self.auto_button.setEnabled(self.single_race_active)
+            self.auto_play.setEnabled(self.single_race_active)
             self.pause_button.setEnabled(self.single_race_active)
             self.reset_button.setEnabled(self.single_race_active)
             self.speed.setEnabled(True)
@@ -680,6 +698,7 @@ def run() -> int:
 
         def apply_loaded_settings_to_controls(self) -> None:
             self.speed.setValue(self.user_settings.single_race.speed_ms)
+            self.auto_play.setChecked(self.user_settings.single_race.auto_play)
             self.run_count.setValue(self.user_settings.batch_simulation.runs)
             self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
@@ -703,7 +722,7 @@ def run() -> int:
                     selected_dango_ids=selected_ids,
                     boss_mode=boss_mode,
                 ),
-                single_race=SingleRaceSettings(speed_ms=self.speed.value()),
+                single_race=SingleRaceSettings(speed_ms=self.speed.value(), auto_play=self.auto_play.isChecked()),
                 batch_simulation=BatchSimulationSettings(
                     runs=self.run_count.value(),
                     seed_mode=str(self.seed_mode.currentData()),

@@ -27,6 +27,7 @@ class ParticipantSettings:
 @dataclass(frozen=True)
 class SingleRaceSettings:
     speed_ms: int = 700
+    auto_play: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ def _settings_from_payload(payload: dict[str, Any]) -> UserSettings:
         ),
         single_race=SingleRaceSettings(
             speed_ms=_bounded_int(single_race.get("speed_ms"), MIN_SPEED_MS, MAX_SPEED_MS, 700),
+            auto_play=_bool_value(single_race.get("auto_play"), False),
         ),
         batch_simulation=BatchSimulationSettings(
             runs=_bounded_int(batch_simulation.get("runs"), MIN_BATCH_RUNS, MAX_BATCH_RUNS, 1000),
@@ -163,6 +165,10 @@ def _bounded_int(value: Any, minimum: int, maximum: int, default: int) -> int:
 def _choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
     text = str(value)
     return text if text in allowed else default
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    return value if isinstance(value, bool) else default
 
 
 def _worker_setting(value: Any) -> str:

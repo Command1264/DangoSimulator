@@ -27,7 +27,7 @@ def test_user_settings_round_trip_json(tmp_path: Path) -> None:
             selected_dango_ids=("lu", "fei"),
             boss_mode=BossMode.RANKED.value,
         ),
-        single_race=SingleRaceSettings(speed_ms=450),
+        single_race=SingleRaceSettings(speed_ms=450, auto_play=True),
         batch_simulation=BatchSimulationSettings(
             runs=2500,
             seed_mode="system",
@@ -61,7 +61,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
             "selected_dango_ids": ["lu", 123, "unknown"],
             "boss_mode": "bad"
           },
-          "single_race": { "speed_ms": 1 },
+          "single_race": { "speed_ms": 1, "auto_play": "bad" },
           "batch_simulation": {
             "runs": 999999999,
             "seed_mode": "bad",
@@ -79,6 +79,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
     assert settings.participants.selected_dango_ids == ("lu", "unknown")
     assert settings.participants.boss_mode == BossMode.DISRUPTOR.value
     assert settings.single_race.speed_ms == 150
+    assert settings.single_race.auto_play is False
     assert settings.batch_simulation.runs == 99_999_999
     assert settings.batch_simulation.seed_mode == "fixed"
     assert settings.batch_simulation.seed == "123"

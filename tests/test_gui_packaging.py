@@ -36,7 +36,7 @@ def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
             {
                 "version": 1,
                 "participants": {},
-                "single_race": {},
+                "single_race": {"auto_play": True},
                 "batch_simulation": {
                     "runs": 1000,
                     "seed_mode": "fixed",
@@ -64,4 +64,5 @@ def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert settings_path.exists()
     saved = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert saved["single_race"]["auto_play"] is True
     assert saved["batch_simulation"]["workers"] == "1"

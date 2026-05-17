@@ -100,6 +100,12 @@ def avatar_label_for_name(name: str) -> str:
     return stripped[0] if stripped else "?"
 
 
+def format_event_log_message(message: str) -> str:
+    if message.startswith("第 ") or message.startswith("比賽結束"):
+        return message
+    return f"　　{message}"
+
+
 def build_race_config_from_cards(config: RaceConfig, cards: list[ParticipantCardState]) -> RaceConfig:
     by_id = {card.dango_id: card.normalized() for card in cards}
     selected_dangos: list[DangoConfig] = []
