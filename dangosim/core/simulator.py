@@ -507,7 +507,7 @@ class RaceSimulator:
     def _is_bottom_of_stack(self, dango_id: str) -> bool:
         position = self._positions[dango_id]
         stack = self._stacks[position]
-        return bool(stack) and stack[0] == dango_id
+        return len(stack) >= 2 and stack[0] == dango_id
 
     def _is_last_regular(self, dango_id: str) -> bool:
         if self._dangos[dango_id].is_boss or dango_id in self._rankings:

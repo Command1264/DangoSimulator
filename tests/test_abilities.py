@@ -232,3 +232,24 @@ def test_floro_uses_round_start_bottom_state_for_bonus() -> None:
     assert second.dango_id == "floro"
     assert "ability:floro_bottom_bonus" not in second.reasons
     assert second.to_position == 1 + second.roll
+
+
+def test_floro_bottom_bonus_requires_an_actual_stack() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {
+                "id": "floro",
+                "name": "弗洛洛",
+                "start_position": 1,
+                "abilities": [{"id": "floro_bottom_bonus", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+        ],
+        "seed": 0,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_next()
+
+    assert "ability:floro_bottom_bonus" not in result.reasons
+    assert result.to_position == 1 + result.roll

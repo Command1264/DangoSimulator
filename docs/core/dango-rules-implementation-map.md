@@ -58,7 +58,7 @@
 | 團子 | Ability id | 對應元件 | 狀態 |
 | --- | --- | --- | --- |
 | 西格莉卡 | `sigurd_sun_help` | `_apply_round_start_abilities()` | 已實作 |
-| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定 |
+| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_is_bottom_of_stack()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定，且同格至少 2 顆才算堆疊 |
 | 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
 | 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
 | 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
