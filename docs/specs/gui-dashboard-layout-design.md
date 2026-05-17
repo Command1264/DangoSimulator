@@ -57,6 +57,13 @@ GUI 需讓一般使用者在不接觸 JSON 或 Python code 的情況下完成三
 多輪模擬支援 1 到 100000 場。
 GUI 使用背景 worker 執行，避免阻塞主視窗。
 
+Seed 模式：
+
+- 固定 seed：使用者輸入 0 到 2^64-1 的整數 seed，結果可重現。
+- 系統隨機 seed：使用 Python `secrets.randbits(64)` 取得作業系統安全隨機來源，並在 GUI 顯示與回填實際使用 seed，方便切回固定 seed 重跑。
+
+Python 標準函式庫不保證可指定「CPU 熱噪聲」作為來源；系統隨機 seed 是此專案可攜且務實的隨機來源。
+
 結果表欄位：
 
 - 排名

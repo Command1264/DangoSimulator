@@ -3,10 +3,11 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Callable
+from dataclasses import replace
 
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
-from dangosim.gui.services import GuiRaceController, run_batch_simulation
+from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
 from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
@@ -14,6 +15,7 @@ from dangosim.gui.view_models import (
     build_participant_cards,
     build_race_config_from_cards,
 )
+from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
 
 APP_TITLE = "DangoSimulator 小團快跑模擬器"
@@ -35,6 +37,7 @@ def run() -> int:
             QGroupBox,
             QHBoxLayout,
             QLabel,
+            QLineEdit,
             QListWidget,
             QMainWindow,
             QMessageBox,
@@ -132,18 +135,25 @@ def run() -> int:
             self.on_change()
 
     class SimulationWorker(QThread):
-        finished_with_rows = Signal(list)
+        finished_with_result = Signal(object)
         failed = Signal(str)
 
-        def __init__(self, config: RaceConfig, runs: int, seed: int | None) -> None:
+        def __init__(self, config: RaceConfig, runs: int, seed: int | None, seed_mode: SeedMode) -> None:
             super().__init__()
             self.config = config
             self.runs = runs
             self.seed = seed
+            self.seed_mode = seed_mode
 
         def run(self) -> None:
             try:
-                self.finished_with_rows.emit(run_batch_simulation(self.config, runs=self.runs, seed=self.seed))
+                result = run_batch_simulation(
+                    self.config,
+                    runs=self.runs,
+                    seed=self.seed,
+                    seed_mode=self.seed_mode,
+                )
+                self.finished_with_result.emit(result)
             except Exception as exc:  # GUI boundary: surface unexpected worker errors to the user.
                 self.failed.emit(str(exc))
 
@@ -158,6 +168,7 @@ def run() -> int:
             self.card_widgets: list[ParticipantCard] = []
             self.controller: GuiRaceController | None = None
             self.worker: SimulationWorker | None = None
+            self.current_seed = self.base_config.seed or 0
 
             self.auto_timer = QTimer(self)
             self.auto_timer.timeout.connect(self.step_race)
@@ -228,6 +239,9 @@ def run() -> int:
             self.dice_label = QLabel("骰子：-")
             self.dice_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(self.dice_label)
+            self.seed_label = QLabel(f"目前 seed：{self.current_seed}")
+            self.seed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(self.seed_label)
 
             self.start_button.clicked.connect(self.reset_race)
             self.step_button.clicked.connect(self.step_race)
@@ -254,11 +268,20 @@ def run() -> int:
             self.run_count = QSpinBox()
             self.run_count.setRange(1, 100_000)
             self.run_count.setValue(1000)
+            self.seed_mode = QComboBox()
+            self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
+            self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
+            self.seed_input = QLineEdit(str(self.base_config.seed or 0))
+            self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
+            self.seed_input.setMinimumWidth(185)
             self.sort_mode = QComboBox()
             self.sort_mode.addItems(["綜合分數", "勝率", "平均名次"])
             self.run_batch_button = QPushButton("執行多輪模擬")
             controls.addWidget(QLabel("場數"))
             controls.addWidget(self.run_count)
+            controls.addWidget(QLabel("Seed"))
+            controls.addWidget(self.seed_mode)
+            controls.addWidget(self.seed_input)
             controls.addWidget(QLabel("排序"))
             controls.addWidget(self.sort_mode)
             controls.addWidget(self.run_batch_button)
@@ -285,6 +308,16 @@ def run() -> int:
         def reset_race(self) -> None:
             try:
                 self.active_config = self.selected_config()
+                mode = self.selected_seed_mode()
+                requested_seed = self.fixed_seed_value() if mode is SeedMode.FIXED else None
+                resolved_seed = resolve_seed(
+                    mode=mode,
+                    requested_seed=requested_seed,
+                    config_seed=self.active_config.seed,
+                )
+                self.current_seed = resolved_seed.seed
+                self.seed_input.setText(str(self.current_seed))
+                self.active_config = replace(self.active_config, seed=self.current_seed)
                 self.controller = GuiRaceController(self.active_config)
             except ValueError as exc:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
@@ -312,6 +345,7 @@ def run() -> int:
             self.dice_label.setText(
                 f"行動：{state.current_actor or '-'}　骰子：{state.last_roll if state.last_roll is not None else '-'}"
             )
+            self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
             self.ranking.clear()
             for index, dango_id in enumerate(state.rankings, start=1):
                 self.ranking.addItem(f"#{index} {dango_id}")
@@ -325,16 +359,22 @@ def run() -> int:
         def run_batch(self) -> None:
             try:
                 config = self.selected_config()
+                mode = self.selected_seed_mode()
+                seed = self.fixed_seed_value() if mode is SeedMode.FIXED else None
             except ValueError as exc:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             self.run_batch_button.setEnabled(False)
-            self.worker = SimulationWorker(config, self.run_count.value(), 20260517)
-            self.worker.finished_with_rows.connect(self.render_results)
+            self.worker = SimulationWorker(config, self.run_count.value(), seed, mode)
+            self.worker.finished_with_result.connect(self.render_results)
             self.worker.failed.connect(self.show_worker_error)
             self.worker.start()
 
-        def render_results(self, rows: list) -> None:
+        def render_results(self, result: BatchSimulationResult) -> None:
+            rows = result.rows
+            self.current_seed = result.seed
+            self.seed_input.setText(str(result.seed))
+            self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
             mode = self.sort_mode.currentText()
             if mode == "勝率":
                 rows = sorted(rows, key=lambda row: (-row.win_rate, row.average_rank))
@@ -357,6 +397,21 @@ def run() -> int:
         def show_worker_error(self, message: str) -> None:
             self.run_batch_button.setEnabled(True)
             QMessageBox.warning(self, "模擬失敗", message)
+
+        def selected_seed_mode(self) -> SeedMode:
+            return SeedMode(self.seed_mode.currentData())
+
+        def fixed_seed_value(self) -> int:
+            raw_seed = self.seed_input.text().strip()
+            if not raw_seed:
+                raise ValueError("固定 seed 必須是非負整數。")
+            try:
+                seed = int(raw_seed)
+            except ValueError as exc:
+                raise ValueError("固定 seed 必須是非負整數。") from exc
+            if seed < 0 or seed >= MAX_SEED_EXCLUSIVE:
+                raise ValueError(f"固定 seed 必須介於 0 到 {MAX_SEED_EXCLUSIVE - 1}。")
+            return seed
 
     app = QApplication([])
     window = MainWindow()

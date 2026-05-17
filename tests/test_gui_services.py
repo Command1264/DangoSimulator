@@ -3,6 +3,7 @@ from __future__ import annotations
 from dangosim.core.config_loader import load_race_config
 from dangosim.gui.services import GuiRaceController, run_batch_simulation
 from dangosim.gui.view_models import build_participant_cards, build_race_config_from_cards
+from dangosim.randomness import SeedMode
 
 
 def _selected_config():
@@ -37,9 +38,18 @@ def test_gui_race_controller_reset_returns_to_initial_positions() -> None:
 
 
 def test_run_batch_simulation_returns_ranked_rows() -> None:
-    rows = run_batch_simulation(_selected_config(), runs=10, seed=99)
+    result = run_batch_simulation(_selected_config(), runs=10, seed=99)
 
-    assert len(rows) == 6
-    assert rows[0].rank == 1
-    assert rows[0].weighted_score >= rows[-1].weighted_score
-    assert sum(row.wins for row in rows) == 10
+    assert result.seed_mode == SeedMode.FIXED
+    assert result.seed == 99
+    assert len(result.rows) == 6
+    assert result.rows[0].rank == 1
+    assert result.rows[0].weighted_score >= result.rows[-1].weighted_score
+    assert sum(row.wins for row in result.rows) == 10
+
+
+def test_run_batch_simulation_can_resolve_system_seed() -> None:
+    result = run_batch_simulation(_selected_config(), runs=1, seed=None, seed_mode=SeedMode.SYSTEM)
+
+    assert result.seed_mode == SeedMode.SYSTEM
+    assert isinstance(result.seed, int)

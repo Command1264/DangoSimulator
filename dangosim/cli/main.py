@@ -10,6 +10,7 @@ from typing import Sequence
 from dangosim.core.config_loader import ConfigValidationError, load_race_config
 from dangosim.core.models import RaceConfig
 from dangosim.core.simulator import RaceSimulator
+from dangosim.randomness import SeedMode, resolve_seed
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -29,6 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     simulate.add_argument("--config", required=True, help="Race JSON 設定檔")
     simulate.add_argument("--runs", type=int, default=1000, help="模擬場數")
     simulate.add_argument("--seed", type=int, default=None, help="固定隨機種子")
+    simulate.add_argument("--seed-mode", choices=[mode.value for mode in SeedMode], default=SeedMode.FIXED.value, help="seed 模式")
     simulate.add_argument("--out", required=True, help="輸出檔案")
     simulate.add_argument("--format", choices=["json", "csv"], default="json", help="輸出格式")
     return parser
@@ -44,17 +46,33 @@ def _run_simulate(args: argparse.Namespace) -> int:
     except (OSError, ConfigValidationError) as exc:
         raise SystemExit(f"Failed to load config: {exc}") from exc
 
-    summary = simulate_many(config, runs=args.runs, seed=args.seed)
+    seed_mode = SeedMode(args.seed_mode)
+    try:
+        resolved_seed = resolve_seed(mode=seed_mode, requested_seed=args.seed, config_seed=config.seed)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    summary = simulate_many(config, runs=args.runs, seed=resolved_seed.seed, seed_mode=resolved_seed.mode)
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "json":
         output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
-        _write_csv(output_path, summary["results"])
+        _write_csv(
+            output_path,
+            summary["results"],  # type: ignore[arg-type]
+            seed_mode=str(summary["seed_mode"]),
+            base_seed=int(summary["base_seed"]),
+        )
     return 0
 
 
-def simulate_many(config: RaceConfig, *, runs: int, seed: int | None) -> dict[str, object]:
+def simulate_many(
+    config: RaceConfig,
+    *,
+    runs: int,
+    seed: int | None,
+    seed_mode: SeedMode = SeedMode.FIXED,
+) -> dict[str, object]:
     dango_names = {dango.id: dango.name for dango in config.dangos}
     ranked_ids = [
         dango.id for dango in config.dangos if dango.ranked or (dango.is_boss and config.boss_ranked)
@@ -84,14 +102,17 @@ def simulate_many(config: RaceConfig, *, runs: int, seed: int | None) -> dict[st
             }
         )
     results.sort(key=lambda item: (-float(item["win_rate"]), str(item["dango_id"])))
-    return {"runs": runs, "results": results}
+    return {"runs": runs, "seed_mode": seed_mode.value, "base_seed": seed, "results": results}
 
 
-def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
+def _write_csv(path: Path, rows: list[dict[str, object]], *, seed_mode: str, base_seed: int) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["dango_id", "name", "wins", "win_rate", "average_rank"])
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["seed_mode", "base_seed", "dango_id", "name", "wins", "win_rate", "average_rank"],
+        )
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({"seed_mode": seed_mode, "base_seed": base_seed, **row} for row in rows)
 
 
 if __name__ == "__main__":

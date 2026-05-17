@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from dangosim.cli.main import simulate_many
 from dangosim.core.models import MoveResult, RaceConfig, RaceSnapshot
 from dangosim.core.simulator import RaceSimulator
 from dangosim.gui.view_models import RaceViewState, SimulationResultRow, rank_simulation_rows
+from dangosim.randomness import SeedMode, resolve_seed
+
+
+@dataclass(frozen=True)
+class BatchSimulationResult:
+    rows: list[SimulationResultRow]
+    seed_mode: SeedMode
+    seed: int
 
 
 class GuiRaceController:
@@ -33,8 +41,20 @@ class GuiRaceController:
         )
 
 
-def run_batch_simulation(config: RaceConfig, *, runs: int, seed: int | None) -> list[SimulationResultRow]:
-    summary = simulate_many(replace(config, seed=seed), runs=runs, seed=seed)
+def run_batch_simulation(
+    config: RaceConfig,
+    *,
+    runs: int,
+    seed: int | None,
+    seed_mode: SeedMode = SeedMode.FIXED,
+) -> BatchSimulationResult:
+    resolved_seed = resolve_seed(mode=seed_mode, requested_seed=seed, config_seed=config.seed)
+    summary = simulate_many(
+        replace(config, seed=resolved_seed.seed),
+        runs=runs,
+        seed=resolved_seed.seed,
+        seed_mode=resolved_seed.mode,
+    )
     rows = [
         SimulationResultRow(
             dango_id=str(item["dango_id"]),
@@ -45,7 +65,11 @@ def run_batch_simulation(config: RaceConfig, *, runs: int, seed: int | None) -> 
         )
         for item in summary["results"]  # type: ignore[index]
     ]
-    return rank_simulation_rows(rows, participant_count=max(1, len(rows)))
+    return BatchSimulationResult(
+        rows=rank_simulation_rows(rows, participant_count=max(1, len(rows))),
+        seed_mode=resolved_seed.mode,
+        seed=resolved_seed.seed,
+    )
 
 
 def _view_state_from_snapshot(

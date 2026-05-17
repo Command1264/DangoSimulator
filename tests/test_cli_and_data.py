@@ -40,6 +40,8 @@ def test_cli_simulate_writes_json_summary(tmp_path: Path) -> None:
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert exit_code == 0
     assert payload["runs"] == 5
+    assert payload["seed_mode"] == "fixed"
+    assert payload["base_seed"] == 123
     assert sum(item["wins"] for item in payload["results"]) == 5
 
 
@@ -65,4 +67,6 @@ def test_cli_simulate_writes_csv_summary(tmp_path: Path) -> None:
     rows = list(csv.DictReader(output_path.open("r", encoding="utf-8", newline="")))
     assert exit_code == 0
     assert rows
-    assert {"dango_id", "name", "wins", "win_rate", "average_rank"}.issubset(rows[0])
+    assert {"seed_mode", "base_seed", "dango_id", "name", "wins", "win_rate", "average_rank"}.issubset(rows[0])
+    assert rows[0]["seed_mode"] == "fixed"
+    assert rows[0]["base_seed"] == "123"
