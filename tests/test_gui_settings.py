@@ -62,7 +62,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
           },
           "single_race": { "speed_ms": 1 },
           "batch_simulation": {
-            "runs": 999999,
+            "runs": 999999999,
             "seed_mode": "bad",
             "seed": 123,
             "sort_mode": "bad"
@@ -77,7 +77,7 @@ def test_user_settings_validates_bounds_and_enums(tmp_path: Path) -> None:
     assert settings.participants.selected_dango_ids == ("lu", "unknown")
     assert settings.participants.boss_mode == BossMode.DISRUPTOR.value
     assert settings.single_race.speed_ms == 150
-    assert settings.batch_simulation.runs == 100_000
+    assert settings.batch_simulation.runs == 99_999_999
     assert settings.batch_simulation.seed_mode == "fixed"
     assert settings.batch_simulation.seed == "123"
     assert settings.batch_simulation.sort_mode == "綜合分數"

@@ -8,10 +8,12 @@ from dataclasses import replace
 
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
+from dangosim.gui.batch_estimation import estimate_sample_runs, estimate_seconds_from_sample
 from dangosim.gui.layers import build_piece_layers
 from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
 from dangosim.gui.settings import (
     BatchSimulationSettings,
+    MAX_BATCH_RUNS,
     ParticipantSettings,
     SingleRaceSettings,
     UserSettings,
@@ -342,8 +344,10 @@ def run() -> int:
             layout = QVBoxLayout(box)
             controls = QHBoxLayout()
             self.run_count = QSpinBox()
-            self.run_count.setRange(1, 100_000)
+            self.run_count.setRange(1, MAX_BATCH_RUNS)
             self.run_count.setValue(1000)
+            self.run_count.setGroupSeparatorShown(True)
+            self.run_count.setMinimumWidth(125)
             self.seed_mode = QComboBox()
             self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
             self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
@@ -502,11 +506,11 @@ def run() -> int:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
             runs = self.run_count.value()
-            estimate_seconds = self.estimate_batch_seconds(config, runs, seed)
+            sample_runs, estimate_seconds = self.estimate_batch(config, runs, seed)
             QMessageBox.information(
                 self,
                 "多輪模擬預估",
-                f"已先試跑 {min(10, runs)} 場。\n預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
+                f"已先試跑 {sample_runs} 場。\n預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
             )
             self.batch_running = True
             self.reset_batch_progress(total=runs)
@@ -575,13 +579,17 @@ def run() -> int:
             self.batch_progress.setFormat(f"0 / {maximum if total else 0}")
             self.batch_eta.setText("ETA：-")
 
-        def estimate_batch_seconds(self, config: RaceConfig, runs: int, seed: int | None) -> float:
-            sample_runs = min(10, runs)
+        def estimate_batch(self, config: RaceConfig, runs: int, seed: int | None) -> tuple[int, float]:
+            sample_runs = estimate_sample_runs(runs)
             sample_seed = seed if seed is not None else config.seed or 0
             started_at = time.perf_counter()
             run_batch_simulation(config, runs=sample_runs, seed=sample_seed, seed_mode=SeedMode.FIXED)
             elapsed = time.perf_counter() - started_at
-            return (elapsed / sample_runs) * runs if sample_runs else 0.0
+            return sample_runs, estimate_seconds_from_sample(
+                elapsed_seconds=elapsed,
+                sample_runs=sample_runs,
+                total_runs=runs,
+            )
 
         def apply_control_state(self) -> None:
             simulation_active = self.single_race_active or self.batch_running
