@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -41,6 +42,7 @@ def run() -> int:
             QListWidget,
             QMainWindow,
             QMessageBox,
+            QProgressBar,
             QPushButton,
             QScrollArea,
             QSpinBox,
@@ -135,9 +137,15 @@ def run() -> int:
             self.state = self.state.with_updates(selected=self.checkbox.isChecked(), boss_mode=mode)
             self.on_change()
 
+        def set_editing_enabled(self, enabled: bool) -> None:
+            self.checkbox.setEnabled(enabled and not self.state.is_boss)
+            self.mode.setEnabled(enabled)
+
     class SimulationWorker(QThread):
         finished_with_result = Signal(object)
+        cancelled_with_result = Signal(object)
         failed = Signal(str)
+        progress_changed = Signal(int, int, float)
 
         def __init__(self, config: RaceConfig, runs: int, seed: int | None, seed_mode: SeedMode) -> None:
             super().__init__()
@@ -145,16 +153,32 @@ def run() -> int:
             self.runs = runs
             self.seed = seed
             self.seed_mode = seed_mode
+            self._cancel_requested = False
+
+        def cancel(self) -> None:
+            self._cancel_requested = True
 
         def run(self) -> None:
             try:
+                started_at = time.perf_counter()
+
+                def report_progress(completed: int, total: int) -> None:
+                    elapsed = time.perf_counter() - started_at
+                    eta_seconds = (elapsed / completed) * (total - completed) if completed else 0.0
+                    self.progress_changed.emit(completed, total, eta_seconds)
+
                 result = run_batch_simulation(
                     self.config,
                     runs=self.runs,
                     seed=self.seed,
                     seed_mode=self.seed_mode,
+                    progress_callback=report_progress,
+                    cancel_requested=lambda: self._cancel_requested,
                 )
-                self.finished_with_result.emit(result)
+                if result.cancelled:
+                    self.cancelled_with_result.emit(result)
+                else:
+                    self.finished_with_result.emit(result)
             except Exception as exc:  # GUI boundary: surface unexpected worker errors to the user.
                 self.failed.emit(str(exc))
 
@@ -170,6 +194,8 @@ def run() -> int:
             self.controller: GuiRaceController | None = None
             self.worker: SimulationWorker | None = None
             self.current_seed = self.base_config.seed or 0
+            self.single_race_active = False
+            self.batch_running = False
 
             self.auto_timer = QTimer(self)
             self.auto_timer.timeout.connect(self.step_race)
@@ -244,7 +270,7 @@ def run() -> int:
             self.seed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(self.seed_label)
 
-            self.start_button.clicked.connect(self.reset_race)
+            self.start_button.clicked.connect(self.start_race)
             self.step_button.clicked.connect(self.step_race)
             self.auto_button.clicked.connect(self.start_auto)
             self.pause_button.clicked.connect(self.pause_auto)
@@ -278,6 +304,7 @@ def run() -> int:
             self.sort_mode = QComboBox()
             self.sort_mode.addItems(["綜合分數", "勝率", "平均名次"])
             self.run_batch_button = QPushButton("執行多輪模擬")
+            self.stop_batch_button = QPushButton("停止模擬")
             controls.addWidget(QLabel("場數"))
             controls.addWidget(self.run_count)
             controls.addWidget(QLabel("Seed"))
@@ -286,13 +313,25 @@ def run() -> int:
             controls.addWidget(QLabel("排序"))
             controls.addWidget(self.sort_mode)
             controls.addWidget(self.run_batch_button)
+            controls.addWidget(self.stop_batch_button)
             controls.addStretch()
             layout.addLayout(controls)
+
+            progress = QHBoxLayout()
+            self.batch_progress = QProgressBar()
+            self.batch_progress.setRange(0, 1)
+            self.batch_progress.setValue(0)
+            self.batch_progress.setFormat("%v / %m")
+            self.batch_eta = QLabel("ETA：-")
+            progress.addWidget(self.batch_progress, 1)
+            progress.addWidget(self.batch_eta)
+            layout.addLayout(progress)
 
             self.results = QTableWidget(0, 6)
             self.results.setHorizontalHeaderLabels(["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"])
             layout.addWidget(self.results)
             self.run_batch_button.clicked.connect(self.run_batch)
+            self.stop_batch_button.clicked.connect(self.stop_batch)
             return box
 
         def _sync_cards_from_widgets(self) -> None:
@@ -306,29 +345,45 @@ def run() -> int:
             selected = [card.name for card in self.cards if card.selected and not card.is_boss]
             self.selected_summary.setText(f"已選 {len(selected)} 顆：{'、'.join(selected) or '尚未選擇'}")
 
-        def reset_race(self) -> None:
+        def start_race(self) -> None:
             try:
-                self.active_config = self.selected_config()
-                mode = self.selected_seed_mode()
-                requested_seed = self.fixed_seed_value() if mode is SeedMode.FIXED else None
-                resolved_seed = resolve_seed(
-                    mode=mode,
-                    requested_seed=requested_seed,
-                    config_seed=self.active_config.seed,
-                )
-                self.current_seed = resolved_seed.seed
-                self.seed_input.setText(str(self.current_seed))
-                self.active_config = replace(self.active_config, seed=self.current_seed)
-                self.controller = GuiRaceController(self.active_config)
+                self.configure_race_from_controls()
             except ValueError as exc:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
+            self.single_race_active = True
             self.pause_auto()
             self.render_state(self.controller.view_state())
+            self.apply_control_state()
+
+        def reset_race(self) -> None:
+            try:
+                self.configure_race_from_controls()
+            except ValueError as exc:
+                QMessageBox.warning(self, "設定錯誤", str(exc))
+                return
+            self.single_race_active = False
+            self.pause_auto()
+            self.render_state(self.controller.view_state())
+            self.reset_batch_progress()
+            self.apply_control_state()
+
+        def configure_race_from_controls(self) -> None:
+            self.active_config = self.selected_config()
+            mode = self.selected_seed_mode()
+            requested_seed = self.fixed_seed_value() if mode is SeedMode.FIXED else None
+            resolved_seed = resolve_seed(
+                mode=mode,
+                requested_seed=requested_seed,
+                config_seed=self.active_config.seed,
+            )
+            self.current_seed = resolved_seed.seed
+            self.seed_input.setText(str(self.current_seed))
+            self.active_config = replace(self.active_config, seed=self.current_seed)
+            self.controller = GuiRaceController(self.active_config)
 
         def step_race(self) -> None:
-            if self.controller is None:
-                self.reset_race()
+            if self.controller is None or not self.single_race_active:
                 return
             state = self.controller.step()
             self.render_state(state)
@@ -336,6 +391,8 @@ def run() -> int:
                 self.pause_auto()
 
         def start_auto(self) -> None:
+            if not self.single_race_active:
+                return
             self.auto_timer.start(self.speed.value())
 
         def pause_auto(self) -> None:
@@ -358,6 +415,9 @@ def run() -> int:
                 self.events.addItem(message)
 
         def run_batch(self) -> None:
+            if self.single_race_active:
+                QMessageBox.warning(self, "模擬中", "請先重置單場模擬，再執行多輪模擬。")
+                return
             try:
                 config = self.selected_config()
                 mode = self.selected_seed_mode()
@@ -365,17 +425,30 @@ def run() -> int:
             except ValueError as exc:
                 QMessageBox.warning(self, "設定錯誤", str(exc))
                 return
-            self.run_batch_button.setEnabled(False)
-            self.worker = SimulationWorker(config, self.run_count.value(), seed, mode)
+            runs = self.run_count.value()
+            estimate_seconds = self.estimate_batch_seconds(config, runs, seed)
+            QMessageBox.information(
+                self,
+                "多輪模擬預估",
+                f"已先試跑 {min(10, runs)} 場。\n預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
+            )
+            self.batch_running = True
+            self.reset_batch_progress(total=runs)
+            self.apply_control_state()
+            self.worker = SimulationWorker(config, runs, seed, mode)
             self.worker.finished_with_result.connect(self.render_results)
+            self.worker.cancelled_with_result.connect(self.handle_batch_cancelled)
+            self.worker.progress_changed.connect(self.update_batch_progress)
             self.worker.failed.connect(self.show_worker_error)
             self.worker.start()
 
         def render_results(self, result: BatchSimulationResult) -> None:
+            self.batch_running = False
             rows = result.rows
             self.current_seed = result.seed
             self.seed_input.setText(str(result.seed))
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
+            self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
             mode = self.sort_mode.currentText()
             if mode == "勝率":
                 rows = sorted(rows, key=lambda row: (-row.win_rate, row.average_rank))
@@ -393,11 +466,79 @@ def run() -> int:
                 ]
                 for column, value in enumerate(values):
                     self.results.setItem(visual_rank - 1, column, QTableWidgetItem(value))
-            self.run_batch_button.setEnabled(True)
+            self.apply_control_state()
 
         def show_worker_error(self, message: str) -> None:
-            self.run_batch_button.setEnabled(True)
+            self.batch_running = False
+            self.apply_control_state()
             QMessageBox.warning(self, "模擬失敗", message)
+
+        def stop_batch(self) -> None:
+            if self.worker is None or not self.batch_running:
+                return
+            self.stop_batch_button.setEnabled(False)
+            self.batch_eta.setText("ETA：正在停止...")
+            self.worker.cancel()
+
+        def handle_batch_cancelled(self, result: BatchSimulationResult) -> None:
+            self.batch_running = False
+            self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
+            self.batch_eta.setText(f"已停止：{result.completed_runs} / {result.total_runs}")
+            self.apply_control_state()
+
+        def update_batch_progress(self, completed: int, total: int, eta_seconds: float) -> None:
+            self.batch_progress.setRange(0, max(1, total))
+            self.batch_progress.setValue(completed)
+            self.batch_progress.setFormat(f"{completed} / {total}")
+            self.batch_eta.setText(f"ETA：{self.format_duration(eta_seconds)}")
+
+        def reset_batch_progress(self, total: int | None = None) -> None:
+            maximum = total or 1
+            self.batch_progress.setRange(0, maximum)
+            self.batch_progress.setValue(0)
+            self.batch_progress.setFormat(f"0 / {maximum if total else 0}")
+            self.batch_eta.setText("ETA：-")
+
+        def estimate_batch_seconds(self, config: RaceConfig, runs: int, seed: int | None) -> float:
+            sample_runs = min(10, runs)
+            sample_seed = seed if seed is not None else config.seed or 0
+            started_at = time.perf_counter()
+            run_batch_simulation(config, runs=sample_runs, seed=sample_seed, seed_mode=SeedMode.FIXED)
+            elapsed = time.perf_counter() - started_at
+            return (elapsed / sample_runs) * runs if sample_runs else 0.0
+
+        def apply_control_state(self) -> None:
+            simulation_active = self.single_race_active or self.batch_running
+            self.set_participant_controls_enabled(not simulation_active)
+
+            self.start_button.setEnabled(not simulation_active)
+            self.step_button.setEnabled(self.single_race_active)
+            self.auto_button.setEnabled(self.single_race_active)
+            self.pause_button.setEnabled(self.single_race_active)
+            self.reset_button.setEnabled(self.single_race_active)
+            self.speed.setEnabled(True)
+
+            batch_controls_enabled = not self.batch_running and not self.single_race_active
+            self.run_count.setEnabled(batch_controls_enabled)
+            self.seed_mode.setEnabled(batch_controls_enabled)
+            self.seed_input.setEnabled(batch_controls_enabled)
+            self.run_batch_button.setEnabled(batch_controls_enabled)
+            self.stop_batch_button.setEnabled(self.batch_running)
+            self.sort_mode.setEnabled(True)
+
+        def set_participant_controls_enabled(self, enabled: bool) -> None:
+            for widget in self.card_widgets:
+                widget.set_editing_enabled(enabled)
+
+        def format_duration(self, seconds: float) -> str:
+            seconds = max(0, int(round(seconds)))
+            minutes, remaining_seconds = divmod(seconds, 60)
+            hours, remaining_minutes = divmod(minutes, 60)
+            if hours:
+                return f"{hours} 小時 {remaining_minutes} 分 {remaining_seconds} 秒"
+            if remaining_minutes:
+                return f"{remaining_minutes} 分 {remaining_seconds} 秒"
+            return f"{remaining_seconds} 秒"
 
         def selected_seed_mode(self) -> SeedMode:
             return SeedMode(self.seed_mode.currentData())

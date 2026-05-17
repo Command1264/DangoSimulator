@@ -53,3 +53,41 @@ def test_run_batch_simulation_can_resolve_system_seed() -> None:
 
     assert result.seed_mode == SeedMode.SYSTEM
     assert isinstance(result.seed, int)
+
+
+def test_run_batch_simulation_reports_progress() -> None:
+    progress: list[tuple[int, int]] = []
+
+    result = run_batch_simulation(
+        _selected_config(),
+        runs=5,
+        seed=99,
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+    )
+
+    assert result.completed_runs == 5
+    assert result.total_runs == 5
+    assert result.cancelled is False
+    assert progress == [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)]
+
+
+def test_run_batch_simulation_can_cancel_after_progress_callback() -> None:
+    should_cancel = False
+
+    def progress_callback(completed: int, total: int) -> None:
+        nonlocal should_cancel
+        if completed == 2:
+            should_cancel = True
+
+    result = run_batch_simulation(
+        _selected_config(),
+        runs=5,
+        seed=99,
+        progress_callback=progress_callback,
+        cancel_requested=lambda: should_cancel,
+    )
+
+    assert result.completed_runs == 2
+    assert result.total_runs == 5
+    assert result.cancelled is True
+    assert sum(row.wins for row in result.rows) == 2

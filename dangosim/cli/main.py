@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
@@ -77,6 +78,8 @@ def simulate_many(
     runs: int,
     seed: int | None,
     seed_mode: SeedMode = SeedMode.FIXED,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> dict[str, object]:
     dango_names = {dango.id: dango.name for dango in config.dangos}
     ranked_ids = [
@@ -85,7 +88,10 @@ def simulate_many(
     wins = {dango_id: 0 for dango_id in ranked_ids}
     rank_totals = {dango_id: 0 for dango_id in ranked_ids}
 
+    completed_runs = 0
     for index in range(runs):
+        if cancel_requested is not None and cancel_requested():
+            break
         run_seed = (seed if seed is not None else config.seed or 0) + index
         run_config = replace(config, seed=run_seed)
         snapshot = RaceSimulator(run_config).run_until_finished()
@@ -94,20 +100,31 @@ def simulate_many(
             wins[rankings[0]] += 1
         for rank_index, dango_id in enumerate(rankings, start=1):
             rank_totals[dango_id] += rank_index
+        completed_runs += 1
+        if progress_callback is not None:
+            progress_callback(completed_runs, runs)
 
     results = []
+    denominator = max(1, completed_runs)
     for dango_id in ranked_ids:
         results.append(
             {
                 "dango_id": dango_id,
                 "name": dango_names[dango_id],
                 "wins": wins[dango_id],
-                "win_rate": wins[dango_id] / runs,
-                "average_rank": rank_totals[dango_id] / runs if runs else 0,
+                "win_rate": wins[dango_id] / denominator,
+                "average_rank": rank_totals[dango_id] / denominator if completed_runs else 0,
             }
         )
     results.sort(key=lambda item: (-float(item["win_rate"]), str(item["dango_id"])))
-    return {"runs": runs, "seed_mode": seed_mode.value, "base_seed": seed, "results": results}
+    return {
+        "runs": runs,
+        "completed_runs": completed_runs,
+        "cancelled": completed_runs < runs,
+        "seed_mode": seed_mode.value,
+        "base_seed": seed,
+        "results": results,
+    }
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]], *, seed_mode: str, base_seed: int) -> None:

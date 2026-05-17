@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from dangosim.cli.main import simulate_many
@@ -14,6 +15,9 @@ class BatchSimulationResult:
     rows: list[SimulationResultRow]
     seed_mode: SeedMode
     seed: int
+    completed_runs: int
+    total_runs: int
+    cancelled: bool
 
 
 class GuiRaceController:
@@ -47,6 +51,8 @@ def run_batch_simulation(
     runs: int,
     seed: int | None,
     seed_mode: SeedMode = SeedMode.FIXED,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> BatchSimulationResult:
     resolved_seed = resolve_seed(mode=seed_mode, requested_seed=seed, config_seed=config.seed)
     summary = simulate_many(
@@ -54,6 +60,8 @@ def run_batch_simulation(
         runs=runs,
         seed=resolved_seed.seed,
         seed_mode=resolved_seed.mode,
+        progress_callback=progress_callback,
+        cancel_requested=cancel_requested,
     )
     rows = [
         SimulationResultRow(
@@ -69,6 +77,9 @@ def run_batch_simulation(
         rows=rank_simulation_rows(rows, participant_count=max(1, len(rows))),
         seed_mode=resolved_seed.mode,
         seed=resolved_seed.seed,
+        completed_runs=int(summary["completed_runs"]),
+        total_runs=int(summary["runs"]),
+        cancelled=bool(summary["cancelled"]),
     )
 
 
