@@ -2,9 +2,23 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from dangosim.core.boss_rules import should_boss_return_to_finish
 from dangosim.core.models import DeviceType, EventRecord, MoveResult, RaceConfig, RaceSnapshot
+
+
+@dataclass(frozen=True)
+class _BuiltinBeforeMoveResult:
+    steps: int
+    skip_movement: bool = False
+
+
+@dataclass(frozen=True)
+class _BeforeMoveResult:
+    steps: int
+    reasons: tuple[str, ...]
+    skip_movement: bool = False
 
 
 class RaceSimulator:
@@ -27,6 +41,7 @@ class RaceSimulator:
         self._last_rolls: dict[str, int] = {}
         self._ability_flags: dict[str, set[str]] = {dango.id: set() for dango in config.dangos}
         self._round_step_penalties: dict[str, int] = {}
+        self._round_start_bottom_dangos: set[str] = set()
 
     def step_dango(self, dango_id: str, roll: int) -> MoveResult:
         if dango_id not in self._dangos:
@@ -36,7 +51,22 @@ class RaceSimulator:
 
         dango = self._dangos[dango_id]
         from_position = self._positions[dango_id]
-        effective_roll, ability_reasons = self._apply_before_move_abilities(dango_id, roll)
+        before_move = self._apply_before_move_abilities(dango_id, roll)
+        if before_move.skip_movement:
+            self._last_rolls[dango_id] = roll
+            self._record_finishers()
+            return MoveResult(
+                dango_id=dango_id,
+                roll=roll,
+                from_position=from_position,
+                to_position=from_position,
+                carried=(),
+                device_triggered=DeviceType.BLANK,
+                reasons=before_move.reasons,
+            )
+
+        effective_roll = before_move.steps
+        ability_reasons = before_move.reasons
         carried = self._take_moving_group(dango_id, from_position)
         base_position = self._move_position(from_position, self._forward_delta(dango_id) * effective_roll, dango_id)
         device = self.config.track.device_at(base_position)
@@ -129,10 +159,14 @@ class RaceSimulator:
         ]
         if not active:
             self._turn_queue = []
+            self._round_start_bottom_dangos = set()
             return
         self._rng.shuffle(active)
         self._turn_queue = active
         self._round_number += 1
+        self._round_start_bottom_dangos = {
+            dango_id for dango_id in active if self._is_bottom_of_stack(dango_id)
+        }
         self._round_step_penalties = {}
         self._event_log.append(
             EventRecord(
@@ -207,9 +241,10 @@ class RaceSimulator:
     def _forward_delta(self, dango_id: str) -> int:
         return -1 if self._dangos[dango_id].is_boss else 1
 
-    def _apply_before_move_abilities(self, dango_id: str, roll: int) -> tuple[int, tuple[str, ...]]:
+    def _apply_before_move_abilities(self, dango_id: str, roll: int) -> _BeforeMoveResult:
         dango = self._dangos[dango_id]
         effective_roll = roll
+        skip_movement = False
         reasons: list[str] = []
         for ability in dango.abilities:
             key = (dango_id, ability.id)
@@ -220,10 +255,11 @@ class RaceSimulator:
             if not all(condition.type == "always" for condition in ability.conditions):
                 continue
             if self._is_builtin_action(ability):
-                new_roll = self._apply_builtin_before_move(dango_id, ability, effective_roll)
-                if new_roll == effective_roll:
+                result = self._apply_builtin_before_move(dango_id, ability, effective_roll)
+                if result.steps == effective_roll and not result.skip_movement:
                     continue
-                effective_roll = new_roll
+                effective_roll = result.steps
+                skip_movement = skip_movement or result.skip_movement
                 if ability.once_per_race:
                     self._used_once_abilities.add(key)
                 reasons.append(f"ability:{ability.id}")
@@ -251,34 +287,38 @@ class RaceSimulator:
                 )
             )
         penalty = self._round_step_penalties.get(dango_id, 0)
-        if penalty:
+        if penalty and not skip_movement:
             effective_roll = max(1, effective_roll - penalty)
             reasons.append("round_penalty")
-        return effective_roll, tuple(reasons)
+        return _BeforeMoveResult(
+            steps=effective_roll,
+            reasons=tuple(reasons),
+            skip_movement=skip_movement,
+        )
 
-    def _apply_builtin_before_move(self, dango_id: str, ability, roll: int) -> int:
+    def _apply_builtin_before_move(self, dango_id: str, ability, roll: int) -> _BuiltinBeforeMoveResult:
         if ability.id == "daphne_same_roll_bonus":
-            return roll + 2 if self._last_rolls.get(dango_id) == roll else roll
+            return _BuiltinBeforeMoveResult(roll + 2 if self._last_rolls.get(dango_id) == roll else roll)
         if ability.id == "snow_bird":
-            return roll + 1 if "met_boss" in self._ability_flags[dango_id] else roll
+            return _BuiltinBeforeMoveResult(roll + 1 if "met_boss" in self._ability_flags[dango_id] else roll)
         if ability.id == "floro_bottom_bonus":
-            return roll + 3 if self._is_bottom_of_stack(dango_id) else roll
+            return _BuiltinBeforeMoveResult(roll + 3 if dango_id in self._round_start_bottom_dangos else roll)
         if ability.id == "kat_late_surge_bonus":
             if "kat_late_surge_active" in self._ability_flags[dango_id] and self._rng.random() < ability.probability:
-                return roll + 2
-            return roll
+                return _BuiltinBeforeMoveResult(roll + 2)
+            return _BuiltinBeforeMoveResult(roll)
         if ability.id in {"phoebe_bonus", "chisaki_bonus"}:
-            return roll + 1 if self._rng.random() < ability.probability else roll
+            return _BuiltinBeforeMoveResult(roll + 1 if self._rng.random() < ability.probability else roll)
         if ability.id == "colletta_double_authority":
-            return roll * 2 if self._rng.random() < ability.probability else roll
+            return _BuiltinBeforeMoveResult(roll * 2 if self._rng.random() < ability.probability else roll)
         if ability.id == "linne_colorful":
             chance = self._rng.random()
             if chance < 0.2:
-                return 0
+                return _BuiltinBeforeMoveResult(0, skip_movement=True)
             if chance < 0.8:
-                return roll * 2
-            return roll
-        return roll
+                return _BuiltinBeforeMoveResult(roll * 2)
+            return _BuiltinBeforeMoveResult(roll)
+        return _BuiltinBeforeMoveResult(roll)
 
     def _apply_after_move_abilities(self, dango_id: str, from_position: int) -> None:
         for ability in self._dangos[dango_id].abilities:
@@ -347,7 +387,10 @@ class RaceSimulator:
 
     def _open_time_rift(self, position: int) -> None:
         stack = self._stacks[position]
-        self._rng.shuffle(stack)
+        bosses = [dango_id for dango_id in stack if self._dangos[dango_id].is_boss]
+        regulars = [dango_id for dango_id in stack if not self._dangos[dango_id].is_boss]
+        self._rng.shuffle(regulars)
+        stack[:] = bosses + regulars
         self._event_log.append(
             EventRecord(
                 event_type="time_rift",

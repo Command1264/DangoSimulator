@@ -181,3 +181,54 @@ def test_aemiss_teleports_to_nearest_regular_ahead_after_crossing_midpoint() -> 
     snapshot = simulator.snapshot()
     assert snapshot.positions["aemiss"] == 8
     assert snapshot.stacks[8] == ["target", "aemiss"]
+
+
+def test_linne_unable_to_move_does_not_trigger_device_or_change_stack() -> None:
+    payload = {
+        "track": {"length": 10, "finish": 10, "devices": [{"position": 3, "type": "advance"}]},
+        "dangos": [
+            {"id": "other", "name": "Other", "start_position": 3},
+            {
+                "id": "linne",
+                "name": "琳奈",
+                "start_position": 3,
+                "abilities": [{"id": "linne_colorful", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+        ],
+        "seed": 1,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_dango("linne", 2)
+    snapshot = simulator.snapshot()
+
+    assert result.to_position == 3
+    assert result.device_triggered.value == "blank"
+    assert snapshot.positions["linne"] == 3
+    assert snapshot.stacks[3] == ["other", "linne"]
+    assert all(event.event_type != "device" for event in snapshot.event_log)
+
+
+def test_floro_uses_round_start_bottom_state_for_bonus() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {"id": "other", "name": "Other", "start_position": 1},
+            {
+                "id": "floro",
+                "name": "弗洛洛",
+                "start_position": 1,
+                "abilities": [{"id": "floro_bottom_bonus", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+        ],
+        "seed": 0,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    first = simulator.step_next()
+    second = simulator.step_next()
+
+    assert first.dango_id == "other"
+    assert second.dango_id == "floro"
+    assert "ability:floro_bottom_bonus" not in second.reasons
+    assert second.to_position == 1 + second.roll

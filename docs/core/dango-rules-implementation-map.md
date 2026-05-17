@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | 推進裝置向前 1 格 | `DeviceType.ADVANCE` | 已實作 |
 | 阻遏裝置向後 1 格 | `DeviceType.BLOCK` | 已實作 |
-| 時空裂隙重排堆疊 | `DeviceType.TIME_RIFT` / `_open_time_rift()` | 已實作 |
+| 時空裂隙重排堆疊 | `DeviceType.TIME_RIFT` / `_open_time_rift()` | 已實作；一般團子隨機重排，布大王仍固定於底部 |
 
 ## 布大王
 
@@ -48,7 +48,7 @@
 | 行動時賽道機制對布大王生效 | `_apply_device()` | 已實作 |
 | 布大王骰 1-6 | `_roll_for()` | 已實作 |
 | 推進/阻遏對布大王效果反轉 | `_apply_device()` | 已實作 |
-| 永遠處於堆疊底部 | `_place_group()` | 已實作 |
+| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` | 已實作；落點與時空裂隙後都會維持底部 |
 | 行動時不帶走一般團子 | `_take_moving_group()` | 已實作 |
 | 整輪結束後，若布大王前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
 
@@ -57,8 +57,8 @@
 | 團子 | Ability id | 對應元件 | 狀態 |
 | --- | --- | --- | --- |
 | 西格莉卡 | `sigurd_sun_help` | `_apply_round_start_abilities()` | 已實作 |
-| 弗洛洛 | `floro_bottom_bonus` | `_apply_builtin_before_move()` | 已實作 |
-| 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` | 已實作 |
+| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定 |
+| 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
 | 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
 | 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
 | 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |

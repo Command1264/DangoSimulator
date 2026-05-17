@@ -224,3 +224,43 @@ def test_boss_stays_when_regular_remains_ahead_before_finish_in_boss_direction()
     snapshot = simulator.snapshot()
     assert snapshot.positions["boss"] == 8
     assert all(event.event_type != "boss_return" for event in snapshot.event_log)
+
+
+def test_time_rift_keeps_boss_at_stack_bottom() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=10, finish=10, devices={5: DeviceType.TIME_RIFT}),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=5),
+                DangoConfig(id="boss", name="布大王", start_position=10, is_boss=True, ranked=False),
+            ],
+            seed=1,
+        )
+    )
+
+    simulator.step_dango("boss", 5)
+
+    assert simulator.snapshot().stacks[5][0] == "boss"
+
+
+def test_regular_dangos_roll_only_one_to_three() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=100, finish=100),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=1),
+                DangoConfig(id="boss", name="布大王", start_position=100, is_boss=True, ranked=False),
+            ],
+            seed=11,
+        )
+    )
+
+    regular_rolls = [
+        result.roll
+        for result in (simulator.step_next() for _ in range(12))
+        if result.dango_id != "boss"
+    ]
+
+    assert regular_rolls
+    assert all(1 <= roll <= 3 for roll in regular_rolls)
