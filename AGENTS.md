@@ -5,6 +5,12 @@
 
 關鍵共用規則：在任何建立、修改、刪除檔案，或執行有副作用的命令之前，先提出計畫並等待使用者明確確認；若使用者已明確要求實作同一份方案，視為該方案範圍已確認。
 
+## Canonical Project Rule File
+
+這份檔案是此 repository 的 canonical、team-shared project instruction file。
+通用 agent 行為定義在 `SYSTEM.md`。
+如果還有其他 agent-specific 檔案，請把本檔視為 project source of truth，而其他檔案只作為相容性 wrapper。
+
 ## Project Summary
 
 DangoSimulator 是一個 Python + PySide6 的《鳴潮》二週年「小團快跑」桌面模擬器。
@@ -115,3 +121,94 @@ MVP priorities：
 - 核心流程與手動驗收放 `docs/core/`。
 - 文件使用繁體中文。
 - 若仍是推測規則，必須明確標記為假設，不得寫成官方事實。
+
+## Engineering Workflow
+
+對 non-trivial 工作：
+
+1. 在修改前先形成簡短計畫。
+2. 優先採 test-first 或 test-with-change flow。
+3. 以 incremental、可 review 的方式修改。
+4. 完成前執行相關檢查。
+5. 當行為、架構、GUI 流程或 release 風險改變時，同輪更新文件與手動 QA checklist。
+
+一般開發規則：
+
+- 優先使用 immutability 與 explicit state transitions。
+- 避免 hidden side effects。
+- 驗證所有 external input boundaries。
+- 明確處理 errors。
+- 不要吞掉 exceptions。
+- 保持檔案聚焦且模組化。
+- 新增或修改程式碼時，必須為非顯而易懂的規則、狀態轉換、相容性處理或設計取捨，加上簡潔註解說明為什麼。
+- 不要替每行程式碼或自明邏輯加機械式註解。
+- 建立 commit message 時遵守 conventional commits。
+
+## Git Workflow
+
+完整細節見 `docs/core/git-workflow.md`；本節是強制摘要。
+
+Git 是 mandatory workflow，不是等使用者提醒才做的項目。
+只要任務改動 code 或 tracked docs，除非使用者明確阻止，agent 應主動處理 local git flow。
+
+Branch model：
+
+- 本 repository 使用 Git Flow，兩條 long-lived branches：
+  - `main` 是 stable release branch。
+  - `develop` 是日常整合的預設分支。
+- 不要直接在 `main` 或 `develop` 上持續做 non-trivial implementation work。
+- working branch prefix 必須是 `codex/`。
+
+Branch rules：
+
+- `codex/feature/<scope>` 從 `develop` 開出。
+- 除非更適合 release 或 hotfix 類型，否則新功能、refactor、docs、maintenance 都使用 `codex/feature/<scope>`。
+- 純文件修改可以直接在 `develop` 上操作並提交，不一定要開新的 feature branch。
+- 純文件修改包含只修改 `docs/`、`AGENTS.md`、`SYSTEM.md`、`README`、checklist 或 planning markdown，且沒有同步修改 source code、test、build config、runtime config 或 package metadata。
+- 若文件修改伴隨任何 code、config、dependency、runtime behavior 變更，仍視為一般 feature work，必須從 `develop` 開 `codex/feature/<scope>`。
+- `codex/release/<version>` 從 `develop` 開出，只用於 release candidate stabilization。
+- `codex/hotfix/<scope>` 從 `main` 開出，只用於緊急修補已發布狀態。
+
+Merge-back rules：
+
+- 當 `codex/feature/...` branch 完成 coherent、verified slice，agent 應先 commit 並視 remote 授權狀態推送 working branch。
+- 只有在使用者明確確認可以合併後，才 merge 回 `develop`。
+- 使用者沒有明確說可以合併時，不可把沒有阻止解讀成允許 merge。
+- 不要把下一個不相關 feature 疊在已完成但尚未 merge 的 feature branch 上。
+- 每次 feature merge 後，下一個工作應從最新的 `develop` 重新開 branch。
+- feature、release、hotfix branch 已成功 merge 且沒有保留理由時，應主動刪除已完成的 working branch；若 remote operations 已授權，也應刪除 remote branch。
+
+Commit rules：
+
+- 完成一個 coherent、verified slice 後，stage 相關檔案並建立 conventional commit。
+- 不要把不相關工作包進同一個 commit。
+- 若有幫助，commit body 中要附上具體 test plan。
+- 如果工作仍在探索中，或 verification 尚未通過，就不要先 commit。
+
+Current project branch classification：
+
+- 目前專案狀態：greenfield MVP foundation，且已切換到 Git Flow 管理。
+- `main` 是穩定 release baseline。
+- `develop` 是後續工作的主整合線，也是 GitHub default branch。
+- 新工作通常應從 `develop` 開 `codex/feature/...`。
+- `codex/release/...` 保留給 release preparation，`codex/hotfix/...` 保留給緊急 production fix。
+
+## AI-Agent Working Rules
+
+- 遵守 `SYSTEM.md` 中的通用 approval 與 execution 規則。
+- 在 non-trivial implementation 前，先檢查 `git status` 與目前分支。
+- 如果目前分支是 `main`，先切到 `develop` 或從 `develop` 開正確的 `codex/...` working branch，再開始寫碼。
+- 如果目前分支是 `develop`，只有 docs-only 工作可直接提交；其他工作先開 `codex/feature/<scope>`。
+- 如果目前 feature branch 已完成且驗證通過，但使用者尚未明確確認可以合併，先 commit / push working branch 並停止在等待確認狀態。
+- verification 通過後，不要等提醒，直接 commit 已完成的 slice。
+- 若本輪任務有修改使用者可見 GUI、CLI、輸出格式、錯誤處理、packaging 或 release 風險，必須檢查並更新 `docs/core/pre-release-manual-qa-checklist.md`。
+- 每次完成一個已驗證的 implementation slice 後，final response 應附上一小段建議手動測試清單。
+
+## Task-Specific Docs
+
+- `docs/core/git-workflow.md`：Git Flow、branch、merge-back、remote 與 default branch 規則。
+- `docs/core/pre-release-manual-qa-checklist.md`：上架前的人類手動驗收 source of truth。
+- `docs/specs/gui-dashboard-layout-design.md`：GUI 儀表板、單場展示、多輪模擬與 seed 顯示設計。
+- `docs/specs/race-engine-spec.md`：核心賽跑規則與模擬引擎規格。
+- `docs/specs/json-config-spec.md`：JSON 賽道、裝置、團子與能力設定規格。
+- `docs/specs/betting-system-spec.md`：應援與黑馬值系統規格。
