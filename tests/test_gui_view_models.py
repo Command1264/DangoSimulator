@@ -5,6 +5,7 @@ from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
     SimulationResultRow,
+    avatar_label_for_name,
     build_participant_cards,
     build_race_config_from_cards,
     rank_simulation_rows,
@@ -60,6 +61,11 @@ def test_rank_simulation_rows_uses_70_30_weighted_score() -> None:
     assert ranked[0].dango_id == "fast"
     assert ranked[0].rank == 1
     assert ranked[0].weighted_score > ranked[1].weighted_score
+
+
+def test_avatar_label_uses_first_visible_name_character() -> None:
+    assert avatar_label_for_name("布大王") == "布"
+    assert avatar_label_for_name("  菲比團子") == "菲"
 
 
 def test_participant_card_state_rejects_ranked_boss_mode_for_non_boss() -> None:

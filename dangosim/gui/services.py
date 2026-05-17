@@ -6,7 +6,13 @@ from dataclasses import dataclass, replace
 from dangosim.cli.main import simulate_many
 from dangosim.core.models import MoveResult, RaceConfig, RaceSnapshot
 from dangosim.core.simulator import RaceSimulator
-from dangosim.gui.view_models import RaceViewState, SimulationResultRow, rank_simulation_rows
+from dangosim.gui.view_models import (
+    RaceViewState,
+    RankingViewRow,
+    SimulationResultRow,
+    avatar_label_for_name,
+    rank_simulation_rows,
+)
 from dangosim.randomness import SeedMode, resolve_seed
 
 
@@ -89,6 +95,20 @@ def _view_state_from_snapshot(
     config: RaceConfig,
     last_move: MoveResult | None,
 ) -> RaceViewState:
+    dango_names = {dango.id: dango.name for dango in config.dangos}
+    avatar_labels = {
+        dango_id: avatar_label_for_name(name)
+        for dango_id, name in dango_names.items()
+    }
+    ranking_rows = tuple(
+        RankingViewRow(
+            dango_id=dango_id,
+            name=dango_names.get(dango_id, dango_id),
+            position=snapshot.positions[dango_id],
+            avatar_label=avatar_labels.get(dango_id, avatar_label_for_name(dango_id)),
+        )
+        for dango_id in snapshot.live_rankings
+    )
     return RaceViewState(
         positions=dict(snapshot.positions),
         stacks={position: list(stack) for position, stack in snapshot.stacks.items()},
@@ -97,5 +117,10 @@ def _view_state_from_snapshot(
         last_roll=last_move.roll if last_move else None,
         event_log=tuple(event.message for event in snapshot.event_log),
         rankings=tuple(snapshot.rankings),
+        live_rankings=tuple(snapshot.live_rankings),
+        ranking_rows=ranking_rows,
+        dango_names=dango_names,
+        avatar_labels=avatar_labels,
+        round_number=snapshot.round_number,
         finished=snapshot.finished,
     )

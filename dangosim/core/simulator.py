@@ -90,6 +90,8 @@ class RaceSimulator:
             stacks={position: list(stack) for position, stack in self._stacks.items() if stack},
             event_log=tuple(self._event_log),
             rankings=tuple(self._rankings),
+            live_rankings=self._live_rankings(),
+            round_number=self._round_number,
             finished=self._finished,
         )
 
@@ -350,20 +352,34 @@ class RaceSimulator:
         )
 
     def _record_finishers(self) -> None:
-        for dango_id, position in list(self._positions.items()):
-            dango = self._dangos[dango_id]
-            ranked = dango.ranked or (dango.is_boss and self.config.boss_ranked)
-            if not ranked or dango_id in self._rankings:
-                continue
-            if not dango.is_boss and position >= self.config.track.finish:
-                self._rankings.append(dango_id)
-                self._event_log.append(
-                    EventRecord("finish", f"{dango.name} 抵達終點。", {"dango_id": dango_id})
+        if self._finished:
+            return
+        ranked_ids = self._ranked_participant_ids()
+        finishers = [
+            dango_id
+            for dango_id, position in self._positions.items()
+            if dango_id in ranked_ids
+            and not self._dangos[dango_id].is_boss
+            and position >= self.config.track.finish
+        ]
+        if not finishers:
+            return
+
+        self._rankings = list(self._live_rankings())
+        self._finished = True
+        for dango_id in finishers:
+            self._event_log.append(
+                EventRecord("finish", f"{self._dangos[dango_id].name} 抵達終點。", {"dango_id": dango_id})
+            )
+        if self._rankings:
+            winner = self._rankings[0]
+            self._event_log.append(
+                EventRecord(
+                    event_type="race_finish",
+                    message=f"比賽結束，{self._dangos[winner].name} 取得第 1 名。",
+                    data={"rankings": list(self._rankings)},
                 )
-        ranked_count = sum(
-            1 for dango in self._dangos.values() if dango.ranked or (dango.is_boss and self.config.boss_ranked)
-        )
-        self._finished = ranked_count > 0 and len(self._rankings) >= ranked_count
+            )
 
     def _apply_round_start_abilities(self) -> None:
         if self._round_number <= 1:
@@ -386,14 +402,45 @@ class RaceSimulator:
                 )
 
     def _regulars_by_progress(self) -> list[str]:
-        return sorted(
-            [
-                dango_id
-                for dango_id in self._positions
-                if not self._dangos[dango_id].is_boss and dango_id not in self._rankings
-            ],
-            key=lambda item: (-self._positions[item], item),
+        regular_ids = {
+            dango_id
+            for dango_id in self._positions
+            if not self._dangos[dango_id].is_boss and dango_id not in self._rankings
+        }
+        return list(self._ordered_by_progress(regular_ids))
+
+    def _ranked_participant_ids(self) -> set[str]:
+        return {dango_id for dango_id in self._dangos if self._is_ranked_participant(dango_id)}
+
+    def _is_ranked_participant(self, dango_id: str) -> bool:
+        dango = self._dangos[dango_id]
+        if dango.is_boss:
+            return self.config.boss_ranked
+        return dango.ranked
+
+    def _live_rankings(self) -> tuple[str, ...]:
+        return self._ordered_by_progress(self._ranked_participant_ids())
+
+    def _ordered_by_progress(self, dango_ids: set[str]) -> tuple[str, ...]:
+        if not dango_ids:
+            return ()
+        ordered: list[str] = []
+        ordered_positions = sorted(
+            {position for dango_id, position in self._positions.items() if dango_id in dango_ids},
+            reverse=True,
         )
+        for position in ordered_positions:
+            stack = self._stacks.get(position, [])
+            for dango_id in reversed(stack):
+                if dango_id in dango_ids:
+                    ordered.append(dango_id)
+            missing_from_stack = sorted(
+                dango_id
+                for dango_id in dango_ids
+                if self._positions[dango_id] == position and dango_id not in stack
+            )
+            ordered.extend(missing_from_stack)
+        return tuple(ordered)
 
     def _update_boss_meeting_flags(self) -> None:
         boss_positions = {

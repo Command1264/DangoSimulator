@@ -20,10 +20,15 @@ def test_gui_race_controller_exposes_initial_and_step_view_state() -> None:
     after_step = controller.step()
 
     assert initial.finished is False
+    assert initial.round_number == 0
+    assert after_step.round_number == 1
     assert after_step.current_actor is not None
     assert after_step.last_roll is not None
     assert after_step.positions != initial.positions
     assert set(after_step.devices.values())
+    assert after_step.ranking_rows
+    assert all(row.name for row in after_step.ranking_rows)
+    assert all(row.avatar_label for row in after_step.ranking_rows)
 
 
 def test_gui_race_controller_reset_returns_to_initial_positions() -> None:

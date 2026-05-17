@@ -20,6 +20,9 @@
 | 骰子決定前進步數 | `RaceSimulator._roll_for()` / `step_dango()` | 已實作 |
 | 一般團子骰 1-3 | `RaceSimulator._roll_for()` | 已實作 |
 | 終點格已有團子時疊到最上方 | `RaceSimulator._place_group()` | 已實作；布大王依專屬規則永遠在底部 |
+| 任一一般參賽團子抵達終點即完成比賽 | `RaceSimulator._record_finishers()` | 已實作 |
+| 名次依最靠近終點到最遠排序 | `RaceSimulator._live_rankings()` / `_ordered_by_progress()` | 已實作 |
+| 同一格依堆疊由上至下排序 | `RaceSimulator._ordered_by_progress()` | 已實作，完賽名次與即時名次共用 |
 
 ## 技能與機制
 

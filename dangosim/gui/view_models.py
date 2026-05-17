@@ -42,6 +42,14 @@ class ParticipantCardState:
 
 
 @dataclass(frozen=True)
+class RankingViewRow:
+    dango_id: str
+    name: str
+    position: int
+    avatar_label: str
+
+
+@dataclass(frozen=True)
 class RaceViewState:
     positions: dict[str, int]
     stacks: dict[int, list[str]]
@@ -50,6 +58,11 @@ class RaceViewState:
     last_roll: int | None
     event_log: tuple[str, ...]
     rankings: tuple[str, ...]
+    live_rankings: tuple[str, ...]
+    ranking_rows: tuple[RankingViewRow, ...]
+    dango_names: dict[str, str]
+    avatar_labels: dict[str, str]
+    round_number: int
     finished: bool
 
 
@@ -80,6 +93,11 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
             ).normalized()
         )
     return cards
+
+
+def avatar_label_for_name(name: str) -> str:
+    stripped = name.strip()
+    return stripped[0] if stripped else "?"
 
 
 def build_race_config_from_cards(config: RaceConfig, cards: list[ParticipantCardState]) -> RaceConfig:

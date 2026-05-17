@@ -125,4 +125,6 @@ class RaceSnapshot:
     stacks: Mapping[int, list[str]]
     event_log: tuple[EventRecord, ...]
     rankings: tuple[str, ...]
+    live_rankings: tuple[str, ...]
+    round_number: int
     finished: bool

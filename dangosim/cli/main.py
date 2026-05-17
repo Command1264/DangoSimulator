@@ -83,7 +83,9 @@ def simulate_many(
 ) -> dict[str, object]:
     dango_names = {dango.id: dango.name for dango in config.dangos}
     ranked_ids = [
-        dango.id for dango in config.dangos if dango.ranked or (dango.is_boss and config.boss_ranked)
+        dango.id
+        for dango in config.dangos
+        if (config.boss_ranked if dango.is_boss else dango.ranked)
     ]
     wins = {dango_id: 0 for dango_id in ranked_ids}
     rank_totals = {dango_id: 0 for dango_id in ranked_ids}

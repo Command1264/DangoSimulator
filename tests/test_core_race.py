@@ -68,6 +68,51 @@ def test_time_rift_reorders_stack_with_seeded_randomness() -> None:
     assert snapshot.event_log[-1].event_type == "time_rift"
 
 
+def test_live_rankings_use_progress_and_top_to_bottom_stack_order_before_finish() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=10, finish=10),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=8),
+                DangoConfig(id="b", name="B", start_position=7),
+                DangoConfig(id="c", name="C", start_position=7),
+            ],
+            seed=5,
+        )
+    )
+
+    simulator.step_dango("b", 2)
+    simulator.step_dango("c", 2)
+
+    snapshot = simulator.snapshot()
+    assert snapshot.finished is False
+    assert snapshot.rankings == ()
+    assert snapshot.live_rankings == ("c", "b", "a")
+
+
+def test_first_ranked_dango_at_finish_ends_race_and_ranks_all_by_progress_then_stack_order() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=10, finish=10),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=8),
+                DangoConfig(id="b", name="B", start_position=7),
+                DangoConfig(id="c", name="C", start_position=7),
+            ],
+            seed=5,
+        )
+    )
+
+    simulator.step_dango("b", 2)
+    simulator.step_dango("c", 2)
+    simulator.step_dango("a", 2)
+
+    snapshot = simulator.snapshot()
+    assert snapshot.finished is True
+    assert snapshot.rankings == ("a", "c", "b")
+    assert snapshot.live_rankings == snapshot.rankings
+
+
 def test_boss_runs_counter_clockwise_and_reverses_advance_block_devices() -> None:
     advance_as_block = RaceSimulator(
         RaceConfig(

@@ -25,7 +25,7 @@ APP_TITLE = "DangoSimulator 小團快跑模擬器"
 def run() -> int:
     try:
         from PySide6.QtCore import QThread, QTimer, Qt, Signal
-        from PySide6.QtGui import QColor, QPainter, QPen
+        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -40,6 +40,7 @@ def run() -> int:
             QLabel,
             QLineEdit,
             QListWidget,
+            QListWidgetItem,
             QMainWindow,
             QMessageBox,
             QProgressBar,
@@ -56,6 +57,23 @@ def run() -> int:
         raise SystemExit(
             "PySide6 is not installed. Run: .\\.venv\\Scripts\\python.exe -m pip install -r requirements-gui.txt"
         ) from exc
+
+    piece_palette = [
+        "#5da5da",
+        "#60bd68",
+        "#f17cb0",
+        "#b2912f",
+        "#b276b2",
+        "#decf3f",
+        "#7e62c9",
+    ]
+
+    def piece_color(dango_id: str, state: RaceViewState) -> str:
+        if dango_id == "boss":
+            return "#7e62c9"
+        dango_ids = list(state.positions)
+        index = dango_ids.index(dango_id) if dango_id in state.positions else 0
+        return piece_palette[index % len(piece_palette)]
 
     class TrackScene(QGraphicsScene):
         def __init__(self, parent: QWidget | None = None) -> None:
@@ -86,20 +104,17 @@ def run() -> int:
                 if index == config.track.finish:
                     self.addText("終").setPos(x - 11, y - 34)
 
-            palette = ["#5da5da", "#60bd68", "#f17cb0", "#b2912f", "#b276b2", "#decf3f", "#7e62c9"]
-            for dango_index, (dango_id, position) in enumerate(state.positions.items()):
+            for dango_id, position in state.positions.items():
                 x, y = points.get(position, points[1])
                 stack = state.stacks.get(position, [])
                 stack_index = stack.index(dango_id) if dango_id in stack else 0
                 offset_y = -stack_index * 17
-                color = palette[dango_index % len(palette)]
-                if dango_id == "boss":
-                    color = "#7e62c9"
+                color = piece_color(dango_id, state)
                 piece = QGraphicsEllipseItem(x - 15, y - 28 + offset_y, 30, 30)
                 piece.setBrush(QColor(color))
                 piece.setPen(QPen(QColor("#2f3a44"), 2))
                 self.addItem(piece)
-                label = QGraphicsTextItem(dango_id[:2])
+                label = QGraphicsTextItem(state.avatar_labels.get(dango_id, dango_id[:1]))
                 label.setDefaultTextColor(QColor("#101820"))
                 label.setPos(x - 12, y - 26 + offset_y)
                 self.addItem(label)
@@ -400,19 +415,45 @@ def run() -> int:
 
         def render_state(self, state: RaceViewState) -> None:
             self.track_scene.render_state(self.active_config, state)
+            actor_name = state.dango_names.get(state.current_actor, state.current_actor or "-")
+            round_text = f"第 {state.round_number} 輪" if state.round_number else "尚未開始"
             self.dice_label.setText(
-                f"行動：{state.current_actor or '-'}　骰子：{state.last_roll if state.last_roll is not None else '-'}"
+                f"{round_text}｜行動：{actor_name}　骰子："
+                f"{state.last_roll if state.last_roll is not None else '-'}"
             )
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
             self.ranking.clear()
-            for index, dango_id in enumerate(state.rankings, start=1):
-                self.ranking.addItem(f"#{index} {dango_id}")
-            unfinished = [dango_id for dango_id in state.positions if dango_id not in state.rankings]
-            for dango_id in unfinished:
-                self.ranking.addItem(f"賽中 {dango_id}｜{state.positions[dango_id]} 格")
+            status = "完賽" if state.finished else "賽中"
+            for index, row in enumerate(state.ranking_rows, start=1):
+                item = QListWidgetItem(
+                    self.piece_icon(row.dango_id, state),
+                    f"#{index} {row.name}｜{row.position} 格｜{status}",
+                )
+                self.ranking.addItem(item)
             self.events.clear()
             for message in state.event_log[-80:]:
                 self.events.addItem(message)
+
+        def piece_icon(self, dango_id: str, state: RaceViewState) -> QIcon:
+            pixmap = QPixmap(26, 26)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(QColor(piece_color(dango_id, state)))
+            painter.setPen(QPen(QColor("#2f3a44"), 1))
+            painter.drawEllipse(2, 2, 22, 22)
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(9)
+            painter.setFont(font)
+            painter.setPen(QColor("#101820"))
+            painter.drawText(
+                pixmap.rect(),
+                Qt.AlignmentFlag.AlignCenter,
+                state.avatar_labels.get(dango_id, "?"),
+            )
+            painter.end()
+            return QIcon(pixmap)
 
         def run_batch(self) -> None:
             if self.single_race_active:

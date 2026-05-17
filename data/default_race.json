@@ -1,20 +1,21 @@
 {
-  "name": "小團快跑小組賽範例",
+  "name": "二週年小團快跑標準地圖",
   "seed": 20260517,
   "boss_ranked": false,
   "track": {
     "length": 32,
     "finish": 32,
-    "devices": [
-      { "position": 3, "type": "advance" },
-      { "position": 6, "type": "time_rift" },
-      { "position": 10, "type": "block" },
-      { "position": 11, "type": "advance" },
-      { "position": 16, "type": "advance" },
-      { "position": 20, "type": "time_rift" },
-      { "position": 23, "type": "advance" },
-      { "position": 28, "type": "block" }
-    ]
+    "devices":[
+      { "position":3, "type":"advance" },
+      { "position":5, "type":"time_rift" },
+      { "position":9, "type":"advance" },
+      { "position":13, "type":"time_rift" },
+      { "position":15, "type":"block" },
+      { "position":19, "type":"advance" },
+      { "position":22, "type":"time_rift" },
+      { "position":25, "type":"block" },
+      { "position":29, "type":"block" }
+	  ]
   },
   "dangos": [
     {
@@ -23,7 +24,15 @@
       "group": "A組",
       "start_position": 1,
       "abilities": [
-        { "id": "lu_device_master", "trigger": "on_device", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "lu_device_master",
+          "trigger": "on_device",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "觸發推進裝置時額外前進 3 格；觸發阻遏裝置時額外後退 1 格。"
     },
@@ -33,7 +42,15 @@
       "group": "A組",
       "start_position": 1,
       "abilities": [
-        { "id": "sigurd_sun_help", "trigger": "round_start", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "sigurd_sun_help",
+          "trigger": "round_start",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "每輪標記排名緊鄰自身且更高的至多兩個團子。"
     },
@@ -43,7 +60,15 @@
       "group": "A組",
       "start_position": 1,
       "abilities": [
-        { "id": "daphne_same_roll_bonus", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "daphne_same_roll_bonus",
+          "trigger": "before_move",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "投骰子時若與上一次相同，額外前進 2 格。"
     },
@@ -53,7 +78,15 @@
       "group": "A組",
       "start_position": 1,
       "abilities": [
-        { "id": "snow_bird", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "snow_bird",
+          "trigger": "before_move",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "與布大王相遇後，每次移動額外前進 1 格。"
     },
@@ -67,13 +100,21 @@
           "id": "kat_activate_late_surge",
           "trigger": "after_move",
           "once_per_race": true,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         },
         {
           "id": "kat_late_surge_bonus",
           "trigger": "before_move",
           "probability": 0.6,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         }
       ],
       "ability_note": "自身移動結束後若處於最後一名，剩餘回合 60% 機率額外前進 2 格。"
@@ -88,7 +129,11 @@
           "id": "phoebe_bonus",
           "trigger": "before_move",
           "probability": 0.5,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         }
       ],
       "ability_note": "50% 機率額外前進 1 格。"
@@ -100,7 +145,15 @@
       "start_position": 1,
       "default_selected": false,
       "abilities": [
-        { "id": "floro_bottom_bonus", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "floro_bottom_bonus",
+          "trigger": "before_move",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "回合開始時若處於堆疊最底層，移動時額外前進 3 格。"
     },
@@ -111,7 +164,15 @@
       "start_position": 1,
       "default_selected": false,
       "abilities": [
-        { "id": "linne_colorful", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "linne_colorful",
+          "trigger": "before_move",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "每回合 60% 機率雙倍點數移動，20% 機率無法移動。"
     },
@@ -122,7 +183,15 @@
       "start_position": 1,
       "default_selected": false,
       "abilities": [
-        { "id": "shorekeeper_future", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+        {
+          "id": "shorekeeper_future",
+          "trigger": "before_move",
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
+        }
       ],
       "ability_note": "骰子只會擲出 2 或 3。"
     },
@@ -137,7 +206,11 @@
           "id": "aemiss_ghost",
           "trigger": "after_move",
           "once_per_race": true,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         }
       ],
       "ability_note": "每場一次，經過賽程中點後傳送到前方最近非布大王團子頂端。"
@@ -153,7 +226,11 @@
           "id": "chisaki_bonus",
           "trigger": "before_move",
           "probability": 0.5,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         }
       ],
       "ability_note": "50% 機率額外前進 1 格。"
@@ -169,7 +246,11 @@
           "id": "colletta_double_authority",
           "trigger": "before_move",
           "probability": 0.28,
-          "actions": [{ "type": "builtin" }]
+          "actions": [
+            {
+              "type": "builtin"
+            }
+          ]
         }
       ],
       "ability_note": "28% 機率以雙倍骰子點數移動。"
