@@ -115,7 +115,8 @@ def run() -> int:
             self.checkbox.setChecked(state.selected)
             self.checkbox.setEnabled(not state.is_boss)
             header.addWidget(self.checkbox)
-            header.addWidget(QLabel(state.group))
+            if state.group:
+                header.addWidget(QLabel(state.group))
             layout.addLayout(header)
             note = QLabel(state.skill_note)
             note.setWordWrap(True)

@@ -72,7 +72,7 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
             ParticipantCardState(
                 dango_id=dango.id,
                 name=dango.name,
-                group=dango.group,
+                group="",
                 skill_note=dango.skill_note or "尚未設定技能摘要",
                 selected=dango.default_selected,
                 is_boss=is_boss,
