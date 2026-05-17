@@ -10,6 +10,7 @@ from dangosim.gui.view_models import (
     build_race_config_from_cards,
     format_event_log_message,
     is_auto_play_control_enabled,
+    is_seed_input_enabled,
     rank_simulation_rows,
 )
 import pytest
@@ -80,6 +81,12 @@ def test_auto_play_control_is_available_before_and_after_single_race_start() -> 
     assert is_auto_play_control_enabled(single_race_active=False, batch_running=False) is True
     assert is_auto_play_control_enabled(single_race_active=True, batch_running=False) is True
     assert is_auto_play_control_enabled(single_race_active=False, batch_running=True) is False
+
+
+def test_seed_input_is_enabled_only_for_fixed_seed_when_controls_are_available() -> None:
+    assert is_seed_input_enabled(seed_mode="fixed", batch_controls_enabled=True) is True
+    assert is_seed_input_enabled(seed_mode="system", batch_controls_enabled=True) is False
+    assert is_seed_input_enabled(seed_mode="fixed", batch_controls_enabled=False) is False
 
 
 def test_participant_card_state_rejects_ranked_boss_mode_for_non_boss() -> None:

@@ -30,6 +30,7 @@ from dangosim.gui.view_models import (
     build_race_config_from_cards,
     format_event_log_message,
     is_auto_play_control_enabled,
+    is_seed_input_enabled,
 )
 from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
@@ -658,7 +659,12 @@ def run() -> int:
             batch_controls_enabled = not self.batch_running and not self.single_race_active
             self.run_count.setEnabled(batch_controls_enabled)
             self.seed_mode.setEnabled(batch_controls_enabled)
-            self.seed_input.setEnabled(batch_controls_enabled)
+            self.seed_input.setEnabled(
+                is_seed_input_enabled(
+                    seed_mode=str(self.seed_mode.currentData()),
+                    batch_controls_enabled=batch_controls_enabled,
+                )
+            )
             self.worker_count.setEnabled(batch_controls_enabled)
             self.run_batch_button.setEnabled(batch_controls_enabled)
             self.stop_batch_button.setEnabled(self.batch_running)
@@ -715,10 +721,14 @@ def run() -> int:
         def connect_settings_persistence(self) -> None:
             self.speed.valueChanged.connect(self.persist_user_settings)
             self.run_count.valueChanged.connect(self.persist_user_settings)
-            self.seed_mode.currentIndexChanged.connect(self.persist_user_settings)
+            self.seed_mode.currentIndexChanged.connect(self.handle_seed_mode_changed)
             self.seed_input.textChanged.connect(self.persist_user_settings)
             self.worker_count.currentIndexChanged.connect(self.persist_user_settings)
             self.sort_mode.currentIndexChanged.connect(self.persist_user_settings)
+
+        def handle_seed_mode_changed(self, *_args) -> None:
+            self.apply_control_state()
+            self.persist_user_settings()
 
         def current_user_settings(self) -> UserSettings:
             selected_ids = tuple(card.dango_id for card in self.cards if card.selected and not card.is_boss)

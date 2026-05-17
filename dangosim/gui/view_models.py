@@ -110,6 +110,10 @@ def is_auto_play_control_enabled(*, single_race_active: bool, batch_running: boo
     return not batch_running
 
 
+def is_seed_input_enabled(*, seed_mode: str, batch_controls_enabled: bool) -> bool:
+    return batch_controls_enabled and seed_mode == "fixed"
+
+
 def build_race_config_from_cards(config: RaceConfig, cards: list[ParticipantCardState]) -> RaceConfig:
     by_id = {card.dango_id: card.normalized() for card in cards}
     selected_dangos: list[DangoConfig] = []
