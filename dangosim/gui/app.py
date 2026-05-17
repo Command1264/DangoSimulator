@@ -8,6 +8,7 @@ from dataclasses import replace
 
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
+from dangosim.gui.layers import build_piece_layers
 from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
 from dangosim.gui.view_models import (
     BossMode,
@@ -86,7 +87,8 @@ def run() -> int:
             rx, ry = 245, 165
             length = config.track.length
             pen = QPen(QColor("#55708a"), 2)
-            self.addEllipse(cx - rx, cy - ry, rx * 2, ry * 2, pen)
+            track = self.addEllipse(cx - rx, cy - ry, rx * 2, ry * 2, pen)
+            track.setZValue(0)
             points = {}
             for index in range(1, length + 1):
                 angle = (index - 1) / length * math.tau
@@ -100,22 +102,39 @@ def run() -> int:
                     "time_rift": "#9270d8",
                 }.get(device, "#d8e1ea")
                 item = self.addEllipse(x - 9, y - 9, 18, 18, QPen(QColor("#6a7783"), 1), QColor(color))
+                item.setZValue(10)
                 item.setToolTip(f"格 {index} {device or '空白'}")
                 if index == config.track.finish:
-                    self.addText("終").setPos(x - 11, y - 34)
+                    finish_label = self.addText("終")
+                    finish_label.setZValue(20)
+                    finish_label.setPos(x - 11, y - 34)
 
+            layers = build_piece_layers(positions=state.positions, stacks=state.stacks)
             for dango_id, position in state.positions.items():
                 x, y = points.get(position, points[1])
-                stack = state.stacks.get(position, [])
-                stack_index = stack.index(dango_id) if dango_id in stack else 0
-                offset_y = -stack_index * 17
+                layer = layers[dango_id]
+                offset_y = layer.offset_y
                 color = piece_color(dango_id, state)
+                shadow = QGraphicsEllipseItem(x - 12, y - 24 + offset_y, 30, 30)
+                shadow.setBrush(QColor(16, 24, 32, 55))
+                shadow.setPen(QPen(Qt.PenStyle.NoPen))
+                shadow.setZValue(layer.shadow_z)
+                self.addItem(shadow)
                 piece = QGraphicsEllipseItem(x - 15, y - 28 + offset_y, 30, 30)
                 piece.setBrush(QColor(color))
                 piece.setPen(QPen(QColor("#2f3a44"), 2))
+                piece.setZValue(layer.piece_z)
+                piece.setToolTip(state.dango_names.get(dango_id, dango_id))
                 self.addItem(piece)
+                if dango_id == state.current_actor:
+                    highlight = QGraphicsEllipseItem(x - 19, y - 32 + offset_y, 38, 38)
+                    highlight.setBrush(QColor(0, 0, 0, 0))
+                    highlight.setPen(QPen(QColor("#f0c64a"), 3))
+                    highlight.setZValue(layer.highlight_z)
+                    self.addItem(highlight)
                 label = QGraphicsTextItem(state.avatar_labels.get(dango_id, dango_id[:1]))
                 label.setDefaultTextColor(QColor("#101820"))
+                label.setZValue(layer.label_z)
                 label.setPos(x - 12, y - 26 + offset_y)
                 self.addItem(label)
 
