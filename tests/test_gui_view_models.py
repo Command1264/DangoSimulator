@@ -24,6 +24,7 @@ def test_build_participant_cards_selects_general_dangos_and_marks_boss_as_disrup
     boss = next(card for card in cards if card.is_boss)
 
     assert len(selected) == 6
+    assert any(card.dango_id == "shorekeeper" and not card.selected for card in cards)
     assert boss.name == "布大王"
     assert boss.selected is True
     assert boss.boss_mode == BossMode.DISRUPTOR

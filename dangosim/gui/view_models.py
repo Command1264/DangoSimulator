@@ -74,7 +74,7 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
                 name=dango.name,
                 group=dango.group,
                 skill_note=dango.skill_note or "尚未設定技能摘要",
-                selected=True,
+                selected=dango.default_selected,
                 is_boss=is_boss,
                 boss_mode=BossMode.DISRUPTOR if is_boss else BossMode.NONE,
             ).normalized()

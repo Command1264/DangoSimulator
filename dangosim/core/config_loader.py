@@ -18,9 +18,9 @@ class ConfigValidationError(ValueError):
     pass
 
 
-ALLOWED_ABILITY_TRIGGERS = {"before_move"}
+ALLOWED_ABILITY_TRIGGERS = {"before_move", "after_move", "round_start", "on_device"}
 ALLOWED_ABILITY_CONDITIONS = {"always"}
-ALLOWED_ABILITY_ACTIONS = {"add_steps"}
+ALLOWED_ABILITY_ACTIONS = {"add_steps", "builtin"}
 
 
 def load_race_config(raw_json: str) -> RaceConfig:
@@ -90,6 +90,7 @@ def _parse_dango(raw: Any, length: int) -> DangoConfig:
             abilities=tuple(_parse_abilities(raw.get("abilities", []))),
             group=str(raw.get("group", "預設")),
             skill_note=str(raw.get("ability_note", raw.get("skill_note", ""))),
+            default_selected=bool(raw.get("default_selected", True)),
         )
     except KeyError as exc:
         raise ConfigValidationError(f"Missing dango field: {exc.args[0]}") from exc

@@ -21,6 +21,11 @@ class RaceSimulator:
         self._rankings: list[str] = []
         self._finished = False
         self._used_once_abilities: set[tuple[str, str]] = set()
+        self._turn_queue: list[str] = []
+        self._round_number = 0
+        self._last_rolls: dict[str, int] = {}
+        self._ability_flags: dict[str, set[str]] = {dango.id: set() for dango in config.dangos}
+        self._round_step_penalties: dict[str, int] = {}
 
     def step_dango(self, dango_id: str, roll: int) -> MoveResult:
         if dango_id not in self._dangos:
@@ -37,6 +42,7 @@ class RaceSimulator:
         to_position = self._apply_device(base_position, device, dango_id)
 
         self._place_group(to_position, carried)
+        self._update_boss_meeting_flags()
         reasons: list[str] = list(ability_reasons)
         if device is DeviceType.TIME_RIFT:
             self._open_time_rift(to_position)
@@ -51,6 +57,8 @@ class RaceSimulator:
                 )
             )
 
+        self._apply_after_move_abilities(dango_id, from_position)
+        self._last_rolls[dango_id] = roll
         self._record_finishers()
         return MoveResult(
             dango_id=dango_id,
@@ -63,12 +71,11 @@ class RaceSimulator:
         )
 
     def step_next(self) -> MoveResult:
-        active = [dango_id for dango_id in self._positions if dango_id not in self._rankings]
-        if not active:
-            raise RuntimeError("Race has no active dangos.")
-        dango_id = self._rng.choice(active)
-        max_roll = 6 if self._dangos[dango_id].is_boss else 3
-        return self.step_dango(dango_id, self._rng.randint(1, max_roll))
+        dango_id = self._next_actor()
+        result = self.step_dango(dango_id, self._roll_for(dango_id))
+        if not self._turn_queue:
+            self._finish_round()
+        return result
 
     def run_until_finished(self, max_steps: int = 1000) -> RaceSnapshot:
         for _ in range(max_steps):
@@ -89,6 +96,9 @@ class RaceSimulator:
     def _take_moving_group(self, dango_id: str, position: int) -> list[str]:
         stack = self._stacks[position]
         index = stack.index(dango_id)
+        if self._dangos[dango_id].is_boss:
+            del stack[index]
+            return [dango_id]
         if dango_id not in self._stack_active:
             group = [dango_id]
             del stack[index]
@@ -97,14 +107,95 @@ class RaceSimulator:
         del stack[index:]
         return group
 
+    def _next_actor(self) -> str:
+        while True:
+            if not self._turn_queue:
+                self._start_round()
+            if not self._turn_queue:
+                raise RuntimeError("Race has no active dangos.")
+            dango_id = self._turn_queue.pop(0)
+            if dango_id not in self._rankings:
+                return dango_id
+
+    def _start_round(self) -> None:
+        next_round = self._round_number + 1
+        active = [
+            dango_id
+            for dango_id in self._positions
+            if dango_id not in self._rankings and self._can_act_in_round(dango_id, next_round)
+        ]
+        if not active:
+            self._turn_queue = []
+            return
+        self._rng.shuffle(active)
+        self._turn_queue = active
+        self._round_number += 1
+        self._round_step_penalties = {}
+        self._event_log.append(
+            EventRecord(
+                event_type="round_start",
+                message=f"第 {self._round_number} 回合行動順序：" + "、".join(active),
+                data={"round": self._round_number, "order": list(active)},
+            )
+        )
+        self._apply_round_start_abilities()
+
+    def _can_act_in_round(self, dango_id: str, round_number: int) -> bool:
+        dango = self._dangos[dango_id]
+        return not dango.is_boss or round_number >= 3
+
+    def _finish_round(self) -> None:
+        if self._round_number < 3:
+            return
+        last_regular_position = self._last_regular_position()
+        if last_regular_position is None:
+            return
+        for boss_id, boss in self._dangos.items():
+            if not boss.is_boss or boss_id in self._rankings:
+                continue
+            if self._positions[boss_id] != last_regular_position:
+                self._return_boss_to_finish(boss_id)
+
+    def _last_regular_position(self) -> int | None:
+        regular_positions = [
+            position
+            for dango_id, position in self._positions.items()
+            if not self._dangos[dango_id].is_boss and dango_id not in self._rankings
+        ]
+        return min(regular_positions) if regular_positions else None
+
+    def _return_boss_to_finish(self, boss_id: str) -> None:
+        finish = self.config.track.finish
+        old_position = self._positions[boss_id]
+        if old_position == finish:
+            return
+        self._stacks[old_position].remove(boss_id)
+        self._place_group(finish, [boss_id])
+        self._event_log.append(
+            EventRecord(
+                event_type="boss_return",
+                message=f"{self._dangos[boss_id].name} 與最後一名分開，傳送回終點。",
+                data={"dango_id": boss_id, "from_position": old_position, "to_position": finish},
+            )
+        )
+
     def _place_group(self, position: int, group: Iterable[str]) -> None:
         placed = list(group)
-        self._stacks[position].extend(placed)
+        bosses = [dango_id for dango_id in placed if self._dangos[dango_id].is_boss]
+        regulars = [dango_id for dango_id in placed if not self._dangos[dango_id].is_boss]
+        self._stacks[position][0:0] = bosses
+        self._stacks[position].extend(regulars)
         for dango_id in placed:
             self._positions[dango_id] = position
             self._stack_active.add(dango_id)
         for dango_id in self._stacks[position]:
             self._stack_active.add(dango_id)
+
+    def _roll_for(self, dango_id: str) -> int:
+        if self._has_ability(dango_id, "shorekeeper_future"):
+            return self._rng.choice([2, 3])
+        max_roll = 6 if self._dangos[dango_id].is_boss else 3
+        return self._rng.randint(1, max_roll)
 
     def _forward_delta(self, dango_id: str) -> int:
         return -1 if self._dangos[dango_id].is_boss else 1
@@ -121,7 +212,23 @@ class RaceSimulator:
                 continue
             if not all(condition.type == "always" for condition in ability.conditions):
                 continue
-            if self._rng.random() > ability.probability:
+            if self._is_builtin_action(ability):
+                new_roll = self._apply_builtin_before_move(dango_id, ability, effective_roll)
+                if new_roll == effective_roll:
+                    continue
+                effective_roll = new_roll
+                if ability.once_per_race:
+                    self._used_once_abilities.add(key)
+                reasons.append(f"ability:{ability.id}")
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{dango.name} 發動能力 {ability.id}。",
+                        data={"dango_id": dango_id, "ability_id": ability.id},
+                    )
+                )
+                continue
+            if self._rng.random() >= ability.probability:
                 continue
             for action in ability.actions:
                 if action.type == "add_steps":
@@ -136,7 +243,66 @@ class RaceSimulator:
                     data={"dango_id": dango_id, "ability_id": ability.id},
                 )
             )
+        penalty = self._round_step_penalties.get(dango_id, 0)
+        if penalty:
+            effective_roll = max(1, effective_roll - penalty)
+            reasons.append("round_penalty")
         return effective_roll, tuple(reasons)
+
+    def _apply_builtin_before_move(self, dango_id: str, ability, roll: int) -> int:
+        if ability.id == "daphne_same_roll_bonus":
+            return roll + 2 if self._last_rolls.get(dango_id) == roll else roll
+        if ability.id == "snow_bird":
+            return roll + 1 if "met_boss" in self._ability_flags[dango_id] else roll
+        if ability.id == "floro_bottom_bonus":
+            return roll + 3 if self._is_bottom_of_stack(dango_id) else roll
+        if ability.id == "kat_late_surge_bonus":
+            if "kat_late_surge_active" in self._ability_flags[dango_id] and self._rng.random() < ability.probability:
+                return roll + 2
+            return roll
+        if ability.id in {"phoebe_bonus", "chisaki_bonus"}:
+            return roll + 1 if self._rng.random() < ability.probability else roll
+        if ability.id == "colletta_double_authority":
+            return roll * 2 if self._rng.random() < ability.probability else roll
+        if ability.id == "linne_colorful":
+            chance = self._rng.random()
+            if chance < 0.2:
+                return 0
+            if chance < 0.8:
+                return roll * 2
+            return roll
+        return roll
+
+    def _apply_after_move_abilities(self, dango_id: str, from_position: int) -> None:
+        for ability in self._dangos[dango_id].abilities:
+            key = (dango_id, ability.id)
+            if ability.trigger != "after_move" or not self._is_builtin_action(ability):
+                continue
+            if ability.once_per_race and key in self._used_once_abilities:
+                continue
+            if ability.id == "kat_activate_late_surge" and self._is_last_regular(dango_id):
+                self._ability_flags[dango_id].add("kat_late_surge_active")
+                self._used_once_abilities.add(key)
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 進入追趕狀態。",
+                        data={"dango_id": dango_id, "ability_id": ability.id},
+                    )
+                )
+            elif ability.id == "aemiss_ghost" and self._crossed_midpoint(from_position, self._positions[dango_id]):
+                target = self._nearest_regular_ahead(dango_id)
+                if target is None:
+                    continue
+                self._move_single_to_position(dango_id, self._positions[target])
+                self._used_once_abilities.add(key)
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 傳送到最近團子頂端。",
+                        data={"dango_id": dango_id, "ability_id": ability.id, "target": target},
+                    )
+                )
 
     def _move_position(self, position: int, delta: int, dango_id: str) -> int:
         target = position + delta
@@ -160,7 +326,17 @@ class RaceSimulator:
             delta = forward if is_boss else -forward
         else:
             delta = 0
+        delta += self._device_ability_delta(dango_id, device, forward)
         return self._move_position(position, delta, dango_id)
+
+    def _device_ability_delta(self, dango_id: str, device: DeviceType, forward: int) -> int:
+        if not self._has_ability(dango_id, "lu_device_master"):
+            return 0
+        if device is DeviceType.ADVANCE:
+            return forward * 3
+        if device is DeviceType.BLOCK:
+            return -forward
+        return 0
 
     def _open_time_rift(self, position: int) -> None:
         stack = self._stacks[position]
@@ -188,3 +364,81 @@ class RaceSimulator:
             1 for dango in self._dangos.values() if dango.ranked or (dango.is_boss and self.config.boss_ranked)
         )
         self._finished = ranked_count > 0 and len(self._rankings) >= ranked_count
+
+    def _apply_round_start_abilities(self) -> None:
+        if self._round_number <= 1:
+            return
+        ranked = self._regulars_by_progress()
+        for dango_id in list(self._positions):
+            if not self._has_ability(dango_id, "sigurd_sun_help") or dango_id not in ranked:
+                continue
+            index = ranked.index(dango_id)
+            targets = ranked[max(0, index - 2) : index]
+            for target in targets:
+                self._round_step_penalties[target] = max(self._round_step_penalties.get(target, 0), 1)
+            if targets:
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 標記前方團子：" + "、".join(targets),
+                        data={"dango_id": dango_id, "targets": list(targets), "ability_id": "sigurd_sun_help"},
+                    )
+                )
+
+    def _regulars_by_progress(self) -> list[str]:
+        return sorted(
+            [
+                dango_id
+                for dango_id in self._positions
+                if not self._dangos[dango_id].is_boss and dango_id not in self._rankings
+            ],
+            key=lambda item: (-self._positions[item], item),
+        )
+
+    def _update_boss_meeting_flags(self) -> None:
+        boss_positions = {
+            position for dango_id, position in self._positions.items() if self._dangos[dango_id].is_boss
+        }
+        for dango_id, position in self._positions.items():
+            if self._has_ability(dango_id, "snow_bird") and position in boss_positions:
+                self._ability_flags[dango_id].add("met_boss")
+
+    def _has_ability(self, dango_id: str, ability_id: str) -> bool:
+        return any(ability.id == ability_id for ability in self._dangos[dango_id].abilities)
+
+    def _is_builtin_action(self, ability) -> bool:
+        return any(action.type == "builtin" for action in ability.actions)
+
+    def _is_bottom_of_stack(self, dango_id: str) -> bool:
+        position = self._positions[dango_id]
+        stack = self._stacks[position]
+        return bool(stack) and stack[0] == dango_id
+
+    def _is_last_regular(self, dango_id: str) -> bool:
+        if self._dangos[dango_id].is_boss or dango_id in self._rankings:
+            return False
+        regulars = self._regulars_by_progress()
+        return bool(regulars) and regulars[-1] == dango_id
+
+    def _crossed_midpoint(self, from_position: int, to_position: int) -> bool:
+        midpoint = self.config.track.finish / 2
+        return from_position <= midpoint < to_position
+
+    def _nearest_regular_ahead(self, dango_id: str) -> str | None:
+        position = self._positions[dango_id]
+        candidates = [
+            candidate_id
+            for candidate_id, candidate_position in self._positions.items()
+            if candidate_id != dango_id
+            and not self._dangos[candidate_id].is_boss
+            and candidate_id not in self._rankings
+            and candidate_position > position
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda candidate_id: self._positions[candidate_id])
+
+    def _move_single_to_position(self, dango_id: str, position: int) -> None:
+        old_position = self._positions[dango_id]
+        self._stacks[old_position].remove(dango_id)
+        self._place_group(position, [dango_id])

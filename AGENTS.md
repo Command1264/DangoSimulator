@@ -208,6 +208,8 @@ Current project branch classification：
 
 - `docs/core/git-workflow.md`：Git Flow、branch、merge-back、remote 與 default branch 規則。
 - `docs/core/pre-release-manual-qa-checklist.md`：上架前的人類手動驗收 source of truth。
+- `docs/core/dango-rules.md`：使用者整理的小團快跑規則來源。
+- `docs/core/dango-rules-implementation-map.md`：規則到程式元件與測試覆蓋的對映表。
 - `docs/specs/gui-dashboard-layout-design.md`：GUI 儀表板、單場展示、多輪模擬與 seed 顯示設計。
 - `docs/specs/race-engine-spec.md`：核心賽跑規則與模擬引擎規格。
 - `docs/specs/json-config-spec.md`：JSON 賽道、裝置、團子與能力設定規格。

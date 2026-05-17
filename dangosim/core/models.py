@@ -73,6 +73,7 @@ class DangoConfig:
     abilities: tuple[AbilityConfig, ...] = ()
     group: str = "預設"
     skill_note: str = ""
+    default_selected: bool = True
 
     def __post_init__(self) -> None:
         if not self.id:

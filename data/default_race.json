@@ -22,6 +22,9 @@
       "name": "陸・赫斯團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        { "id": "lu_device_master", "trigger": "on_device", "actions": [{ "type": "builtin" }] }
+      ],
       "ability_note": "觸發推進裝置時額外前進 3 格；觸發阻遏裝置時額外後退 1 格。"
     },
     {
@@ -29,6 +32,9 @@
       "name": "西格莉卡團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        { "id": "sigurd_sun_help", "trigger": "round_start", "actions": [{ "type": "builtin" }] }
+      ],
       "ability_note": "每輪標記排名緊鄰自身且更高的至多兩個團子。"
     },
     {
@@ -36,6 +42,9 @@
       "name": "達妮婭團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        { "id": "daphne_same_roll_bonus", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+      ],
       "ability_note": "投骰子時若與上一次相同，額外前進 2 格。"
     },
     {
@@ -43,6 +52,9 @@
       "name": "緋雪團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        { "id": "snow_bird", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+      ],
       "ability_note": "與布大王相遇後，每次移動額外前進 1 格。"
     },
     {
@@ -50,6 +62,20 @@
       "name": "卡提希婭團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "kat_activate_late_surge",
+          "trigger": "after_move",
+          "once_per_race": true,
+          "actions": [{ "type": "builtin" }]
+        },
+        {
+          "id": "kat_late_surge_bonus",
+          "trigger": "before_move",
+          "probability": 0.6,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "自身移動結束後若處於最後一名，剩餘回合 60% 機率額外前進 2 格。"
     },
     {
@@ -57,7 +83,96 @@
       "name": "菲比團子",
       "group": "A組",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "phoebe_bonus",
+          "trigger": "before_move",
+          "probability": 0.5,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "50% 機率額外前進 1 格。"
+    },
+    {
+      "id": "floro",
+      "name": "弗洛洛團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        { "id": "floro_bottom_bonus", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+      ],
+      "ability_note": "回合開始時若處於堆疊最底層，移動時額外前進 3 格。"
+    },
+    {
+      "id": "linne",
+      "name": "琳奈團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        { "id": "linne_colorful", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+      ],
+      "ability_note": "每回合 60% 機率雙倍點數移動，20% 機率無法移動。"
+    },
+    {
+      "id": "shorekeeper",
+      "name": "守岸人團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        { "id": "shorekeeper_future", "trigger": "before_move", "actions": [{ "type": "builtin" }] }
+      ],
+      "ability_note": "骰子只會擲出 2 或 3。"
+    },
+    {
+      "id": "aemiss",
+      "name": "愛彌斯團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "aemiss_ghost",
+          "trigger": "after_move",
+          "once_per_race": true,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "每場一次，經過賽程中點後傳送到前方最近非布大王團子頂端。"
+    },
+    {
+      "id": "chisaki",
+      "name": "千咲團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "chisaki_bonus",
+          "trigger": "before_move",
+          "probability": 0.5,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "50% 機率額外前進 1 格。"
+    },
+    {
+      "id": "colletta",
+      "name": "珂萊塔團子",
+      "group": "WIP",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "colletta_double_authority",
+          "trigger": "before_move",
+          "probability": 0.28,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "28% 機率以雙倍骰子點數移動。"
     },
     {
       "id": "boss",

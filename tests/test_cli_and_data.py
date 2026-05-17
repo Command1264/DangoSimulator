@@ -43,6 +43,7 @@ def test_cli_simulate_writes_json_summary(tmp_path: Path) -> None:
     assert payload["seed_mode"] == "fixed"
     assert payload["base_seed"] == 123
     assert sum(item["wins"] for item in payload["results"]) == 5
+    assert {item["dango_id"] for item in payload["results"]} == {"lu", "west", "daphne", "snow", "kat", "fei"}
 
 
 def test_cli_simulate_writes_csv_summary(tmp_path: Path) -> None:

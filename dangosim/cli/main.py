@@ -51,7 +51,7 @@ def _run_simulate(args: argparse.Namespace) -> int:
         resolved_seed = resolve_seed(mode=seed_mode, requested_seed=args.seed, config_seed=config.seed)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    summary = simulate_many(config, runs=args.runs, seed=resolved_seed.seed, seed_mode=resolved_seed.mode)
+    summary = simulate_many(_default_selected_config(config), runs=args.runs, seed=resolved_seed.seed, seed_mode=resolved_seed.mode)
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "json":
@@ -64,6 +64,11 @@ def _run_simulate(args: argparse.Namespace) -> int:
             base_seed=int(summary["base_seed"]),
         )
     return 0
+
+
+def _default_selected_config(config: RaceConfig) -> RaceConfig:
+    selected = [dango for dango in config.dangos if dango.default_selected or dango.is_boss]
+    return replace(config, dangos=selected)
 
 
 def simulate_many(
