@@ -14,6 +14,7 @@ class NormalizedIntegerText:
 class SeparatorDeleteEdit:
     text: str
     digit_cursor: int
+    cursor_from_right: int | None = None
 
 
 def format_grouped_int(value: int) -> str:
@@ -34,6 +35,7 @@ def normalize_grouped_int_text(
     minimum: int,
     maximum: int,
     digit_cursor: int | None = None,
+    cursor_from_right: int | None = None,
 ) -> NormalizedIntegerText:
     digits = _digits_only(text)
     if not digits:
@@ -48,7 +50,11 @@ def normalize_grouped_int_text(
         digit_cursor = _count_digits(text[:cursor_position])
     if value != requested_value:
         digit_cursor = len(str(value))
-    cursor = cursor_position_for_digit_count(formatted, digit_cursor)
+        cursor_from_right = None
+    if cursor_from_right is not None:
+        cursor = max(0, min(len(formatted), len(formatted) - cursor_from_right))
+    else:
+        cursor = cursor_position_for_digit_count(formatted, digit_cursor)
     return NormalizedIntegerText(text=formatted, cursor_position=cursor, value=value)
 
 
@@ -60,9 +66,11 @@ def apply_group_separator_delete(text: str, *, cursor_position: int, key: str) -
         target_index = _previous_digit_index(text, separator_index)
         if target_index is None:
             return None
+        edited_text = text[:target_index] + text[target_index + 1 :]
         return SeparatorDeleteEdit(
-            text=text[:target_index] + text[target_index + 1 :],
+            text=edited_text,
             digit_cursor=_count_digits(text[:target_index]),
+            cursor_from_right=len(edited_text) - target_index,
         )
 
     if key == "delete":
@@ -72,9 +80,11 @@ def apply_group_separator_delete(text: str, *, cursor_position: int, key: str) -
         target_index = _next_digit_index(text, separator_index + 1)
         if target_index is None:
             return None
+        edited_text = text[:target_index] + text[target_index + 1 :]
         return SeparatorDeleteEdit(
-            text=text[:target_index] + text[target_index + 1 :],
+            text=edited_text,
             digit_cursor=_count_digits(text[:cursor_position]),
+            cursor_from_right=len(edited_text) - cursor_position,
         )
 
     return None

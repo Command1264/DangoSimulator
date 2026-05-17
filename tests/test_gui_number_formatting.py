@@ -45,6 +45,7 @@ def test_backspace_on_group_separator_deletes_digit_to_the_left() -> None:
         minimum=1,
         maximum=99999999,
         digit_cursor=edit.digit_cursor,
+        cursor_from_right=edit.cursor_from_right,
     )
 
     assert normalized.text == "1,345"
@@ -62,10 +63,11 @@ def test_delete_on_group_separator_deletes_digit_to_the_right() -> None:
         minimum=1,
         maximum=99999999,
         digit_cursor=edit.digit_cursor,
+        cursor_from_right=edit.cursor_from_right,
     )
 
     assert normalized.text == "1,245"
-    assert normalized.cursor_position == 3
+    assert normalized.cursor_position == 2
     assert normalized.value == 1245
 
 

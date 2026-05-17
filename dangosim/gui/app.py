@@ -139,6 +139,7 @@ def run() -> int:
                             minimum=self.minimum(),
                             maximum=self.maximum(),
                             digit_cursor=edit.digit_cursor,
+                            cursor_from_right=edit.cursor_from_right,
                         )
                     )
                     event.accept()
