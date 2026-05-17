@@ -22,3 +22,18 @@ def estimate_seconds_from_sample(
     if sample_runs <= 0 or total_runs <= 0:
         return 0.0
     return (elapsed_seconds / sample_runs) * total_runs
+
+
+def build_batch_estimate_confirmation_message(
+    *,
+    sample_runs: int,
+    worker_count: int,
+    total_runs: int,
+    duration_text: str,
+) -> str:
+    return (
+        f"已先試跑 {sample_runs} 場。\n"
+        f"正式模擬會使用 {worker_count} 個 worker。\n"
+        f"預估 {total_runs} 場約需 {duration_text}。\n\n"
+        "是否開始正式模擬？"
+    )

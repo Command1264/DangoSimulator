@@ -10,7 +10,11 @@ from dataclasses import replace
 from dangosim.core.batch import resolve_worker_count
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
-from dangosim.gui.batch_estimation import estimate_sample_runs, estimate_seconds_from_sample
+from dangosim.gui.batch_estimation import (
+    build_batch_estimate_confirmation_message,
+    estimate_sample_runs,
+    estimate_seconds_from_sample,
+)
 from dangosim.gui.layers import build_piece_layers
 from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_batch_simulation
 from dangosim.gui.settings import (
@@ -545,13 +549,20 @@ def run() -> int:
                 return
             runs = self.run_count.value()
             sample_runs, estimate_seconds, worker_count = self.estimate_batch(config, runs, seed, workers)
-            QMessageBox.information(
+            answer = QMessageBox.question(
                 self,
                 "多輪模擬預估",
-                f"已先試跑 {sample_runs} 場。\n"
-                f"正式模擬會使用 {worker_count} 個 worker。\n"
-                f"預估 {runs} 場約需 {self.format_duration(estimate_seconds)}。",
+                build_batch_estimate_confirmation_message(
+                    sample_runs=sample_runs,
+                    worker_count=worker_count,
+                    total_runs=runs,
+                    duration_text=self.format_duration(estimate_seconds),
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
             )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
             self.batch_running = True
             self.reset_batch_progress(total=runs)
             self.apply_control_state()
