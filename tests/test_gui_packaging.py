@@ -110,6 +110,7 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert probe["ranking_alignment"] == ["center", "left", "right", "center"]
     assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
     assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]
+    assert probe["result_visible_rows"] >= 7
 
 
 def test_gui_event_log_auto_scrolls_only_when_already_at_bottom(tmp_path: Path) -> None:

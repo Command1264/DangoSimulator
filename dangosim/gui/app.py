@@ -107,6 +107,8 @@ def run() -> int:
         "#decf3f",
         "#7e62c9",
     ]
+    RESULT_TABLE_MIN_VISIBLE_ROWS = 7
+    RESULT_TABLE_ROW_HEIGHT = 28
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -759,6 +761,14 @@ def run() -> int:
 
             self.results = QTableWidget(0, 6)
             self.results.setHorizontalHeaderLabels(["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"])
+            self.results.verticalHeader().setDefaultSectionSize(RESULT_TABLE_ROW_HEIGHT)
+            result_header_height = self.results.horizontalHeader().sizeHint().height()
+            self.results.setMinimumHeight(
+                result_header_height
+                + (RESULT_TABLE_ROW_HEIGHT * RESULT_TABLE_MIN_VISIBLE_ROWS)
+                + (self.results.frameWidth() * 2)
+                + 12
+            )
             layout.addWidget(self.results)
             self.run_batch_button.clicked.connect(self.run_batch)
             self.stop_batch_button.clicked.connect(self.stop_batch)
@@ -1339,6 +1349,10 @@ def run() -> int:
                 return "center"
             return "left"
 
+        def visible_rows(table: QTableWidget) -> int:
+            row_height = table.verticalHeader().defaultSectionSize()
+            return table.viewport().height() // row_height
+
         probe = {
             "event_log_parent": window.events.parentWidget().objectName(),
             "splitter_widgets": [
@@ -1357,6 +1371,7 @@ def run() -> int:
                 alignment_name(window.results, column)
                 for column in range(window.results.columnCount())
             ],
+            "result_visible_rows": visible_rows(window.results),
         }
         print(json.dumps(probe, ensure_ascii=False))
         QTimer.singleShot(0, app.quit)
