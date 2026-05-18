@@ -35,7 +35,7 @@ def load_race_config(raw_json: str) -> RaceConfig:
     track_payload = _require_object(payload, "track")
     length = _require_int(track_payload, "length")
     finish = int(track_payload.get("finish", length))
-    devices = _parse_devices(track_payload.get("devices", []), length)
+    devices, midpoint = _parse_devices(track_payload.get("devices", []), length)
 
     dangos_payload = payload.get("dangos")
     if not isinstance(dangos_payload, list) or not dangos_payload:
@@ -44,7 +44,7 @@ def load_race_config(raw_json: str) -> RaceConfig:
     dangos = [_parse_dango(item, length) for item in dangos_payload]
     try:
         return RaceConfig(
-            track=TrackConfig(length=length, finish=finish, devices=devices),
+            track=TrackConfig(length=length, finish=finish, devices=devices, midpoint=midpoint),
             dangos=dangos,
             seed=payload.get("seed"),
             boss_ranked=bool(payload.get("boss_ranked", False)),
@@ -53,13 +53,14 @@ def load_race_config(raw_json: str) -> RaceConfig:
         raise ConfigValidationError(str(exc)) from exc
 
 
-def _parse_devices(raw_devices: Any, length: int) -> dict[int, DeviceType]:
+def _parse_devices(raw_devices: Any, length: int) -> tuple[dict[int, DeviceType], int | None]:
     if raw_devices is None:
-        return {}
+        return {}, None
     if not isinstance(raw_devices, list):
         raise ConfigValidationError("Field 'devices' must be an array.")
 
     devices: dict[int, DeviceType] = {}
+    midpoint: int | None = None
     for raw in raw_devices:
         if not isinstance(raw, dict):
             raise ConfigValidationError("Each device must be an object.")
@@ -67,11 +68,15 @@ def _parse_devices(raw_devices: Any, length: int) -> dict[int, DeviceType]:
         if not 1 <= position <= length:
             raise ConfigValidationError(f"Device position {position} is outside the track.")
         device_type = raw.get("type")
+        if str(device_type) == "midpoint":
+            if midpoint is None:
+                midpoint = position
+            continue
         try:
             devices[position] = DeviceType(str(device_type))
         except ValueError as exc:
             raise ConfigValidationError(f"Unknown device type: {device_type}") from exc
-    return devices
+    return devices, midpoint
 
 
 def _parse_dango(raw: Any, length: int) -> DangoConfig:

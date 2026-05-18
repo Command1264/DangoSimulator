@@ -10,6 +10,7 @@
       { "position": 5, "type": "time_rift" },
       { "position": 9, "type": "advance" },
       { "position": 13, "type": "time_rift" },
+      { "position": 15, "type": "midpoint" },
       { "position": 15, "type": "block" },
       { "position": 19, "type": "advance" },
       { "position": 22, "type": "time_rift" },

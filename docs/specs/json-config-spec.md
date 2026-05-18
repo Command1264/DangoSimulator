@@ -15,7 +15,9 @@
 ## 驗證規則
 
 - 格號必須在賽道範圍內。
-- 裝置 type 必須是已知 enum。
+- 裝置效果 type 必須是已知 enum。
+- `track.devices` 可放 `type: "midpoint"` 作為賽程中點標記；它不是裝置效果，不會進入 `DeviceType`，可與同格推進、阻遏或時空裂隙並存。
+- 若 `track.devices` 內有多個 `midpoint`，只採用第一個讀取到的標記。
 - 團子 id 必須唯一。
 - 起始位置必須合法。
 - 能力 `id` 必須供程式碼與 JSON 規則引用。

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from dangosim.cli.main import main
-from dangosim.core.batch import resolve_worker_count, simulate_many
+from dangosim.core.batch import _pack_config, _unpack_config, resolve_worker_count, simulate_many
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import DangoConfig, RaceConfig, TrackConfig
 from dangosim.randomness import SeedMode
@@ -32,6 +32,19 @@ def test_parallel_simulate_many_matches_single_worker_with_fixed_seed() -> None:
     assert parallel["completed_runs"] == single["completed_runs"] == 24
     assert parallel["cancelled"] is False
     assert parallel["results"] == single["results"]
+
+
+def test_parallel_worker_config_preserves_track_midpoint() -> None:
+    config = RaceConfig(
+        track=TrackConfig(length=10, finish=10, midpoint=6),
+        dangos=[DangoConfig(id="a", name="A", start_position=1)],
+        seed=7,
+    )
+
+    worker_config = _pack_config(config)
+    unpacked = _unpack_config(worker_config, seed=8)
+
+    assert unpacked.track.midpoint == 6
 
 
 def test_parallel_simulate_many_reports_chunk_progress_to_completion() -> None:

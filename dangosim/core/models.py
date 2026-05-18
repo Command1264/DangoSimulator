@@ -18,12 +18,17 @@ class TrackConfig:
     length: int
     finish: int
     devices: Mapping[int, DeviceType] = field(default_factory=dict)
+    midpoint: int | float | None = None
 
     def __post_init__(self) -> None:
         if self.length < 2:
             raise ValueError("Track length must be at least 2.")
         if not 1 <= self.finish <= self.length:
             raise ValueError("Finish must be inside the track.")
+        midpoint = self.midpoint if self.midpoint is not None else self.finish / 2
+        if not 1 <= midpoint <= self.length:
+            raise ValueError("Midpoint must be inside the track.")
+        object.__setattr__(self, "midpoint", midpoint)
 
         normalized: dict[int, DeviceType] = {}
         for position, device in self.devices.items():

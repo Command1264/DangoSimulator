@@ -195,18 +195,28 @@ def run() -> int:
                 y = cy + math.sin(angle) * ry
                 points[index] = (x, y)
                 device = state.devices.get(index, "")
+                is_midpoint = math.isclose(float(config.track.midpoint), float(index))
                 color = {
                     "advance": "#65c56f",
                     "block": "#e37272",
                     "time_rift": "#9270d8",
-                }.get(device, "#d8e1ea")
-                item = self.addEllipse(x - 9, y - 9, 18, 18, QPen(QColor("#6a7783"), 1), QColor(color))
+                }.get(device, "#f0c64a" if is_midpoint else "#d8e1ea")
+                pen_color = "#d2a72c" if is_midpoint else "#6a7783"
+                item = self.addEllipse(x - 9, y - 9, 18, 18, QPen(QColor(pen_color), 2 if is_midpoint else 1), QColor(color))
                 item.setZValue(10)
-                item.setToolTip(f"格 {index} {device or '空白'}")
+                labels = [device] if device else ["空白"]
+                if is_midpoint:
+                    labels.append("中點")
+                item.setToolTip(f"格 {index} {' / '.join(labels)}")
                 if index == config.track.finish:
                     finish_label = self.addText("終")
                     finish_label.setZValue(20)
                     finish_label.setPos(x - 11, y - 34)
+                if is_midpoint:
+                    midpoint_label = self.addText("中")
+                    midpoint_label.setDefaultTextColor(QColor("#8a6a00"))
+                    midpoint_label.setZValue(20)
+                    midpoint_label.setPos(x - 11, y + 11)
 
             layers = build_piece_layers(positions=state.positions, stacks=state.stacks)
             for dango_id, position in state.positions.items():

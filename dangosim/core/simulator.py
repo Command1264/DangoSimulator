@@ -633,7 +633,7 @@ class RaceSimulator:
         return bool(regulars) and regulars[-1] == dango_id
 
     def _crossed_midpoint(self, from_position: int, to_position: int) -> bool:
-        midpoint = self.config.track.finish / 2
+        midpoint = self.config.track.midpoint
         return from_position <= midpoint < to_position
 
     def _nearest_regular_ahead(self, dango_id: str) -> str | None:

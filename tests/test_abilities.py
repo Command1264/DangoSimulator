@@ -183,6 +183,70 @@ def test_aemiss_teleports_to_nearest_regular_ahead_after_crossing_midpoint() -> 
     assert snapshot.stacks[8] == ["target", "aemiss"]
 
 
+def test_aemiss_does_not_trigger_when_landing_on_configured_midpoint() -> None:
+    payload = {
+        "track": {
+            "length": 10,
+            "finish": 10,
+            "devices": [{"position": 6, "type": "midpoint"}],
+        },
+        "dangos": [
+            {
+                "id": "aemiss",
+                "name": "愛彌斯",
+                "start_position": 4,
+                "abilities": [
+                    {
+                        "id": "aemiss_ghost",
+                        "name": "電子幽靈登場",
+                        "trigger": "after_move",
+                        "once_per_race": True,
+                        "actions": [{"type": "builtin"}],
+                    }
+                ],
+            },
+            {"id": "target", "name": "Target", "start_position": 8},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    simulator.step_dango("aemiss", 2)
+
+    assert simulator.snapshot().positions["aemiss"] == 6
+
+
+def test_aemiss_triggers_after_moving_past_configured_midpoint() -> None:
+    payload = {
+        "track": {
+            "length": 10,
+            "finish": 10,
+            "devices": [{"position": 6, "type": "midpoint"}],
+        },
+        "dangos": [
+            {
+                "id": "aemiss",
+                "name": "愛彌斯",
+                "start_position": 4,
+                "abilities": [
+                    {
+                        "id": "aemiss_ghost",
+                        "name": "電子幽靈登場",
+                        "trigger": "after_move",
+                        "once_per_race": True,
+                        "actions": [{"type": "builtin"}],
+                    }
+                ],
+            },
+            {"id": "target", "name": "Target", "start_position": 8},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    simulator.step_dango("aemiss", 3)
+
+    assert simulator.snapshot().positions["aemiss"] == 8
+
+
 def test_linne_unable_to_move_does_not_trigger_device_or_change_stack() -> None:
     payload = {
         "track": {"length": 10, "finish": 10, "devices": [{"position": 3, "type": "advance"}]},

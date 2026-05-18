@@ -19,6 +19,7 @@ CancelRequested = Callable[[], bool]
 class _WorkerRaceConfig:
     track_length: int
     track_finish: int
+    track_midpoint: int | float
     devices: tuple[tuple[int, str], ...]
     dangos: tuple[DangoConfig, ...]
     boss_ranked: bool
@@ -263,6 +264,7 @@ def _pack_config(config: RaceConfig) -> _WorkerRaceConfig:
     return _WorkerRaceConfig(
         track_length=config.track.length,
         track_finish=config.track.finish,
+        track_midpoint=config.track.midpoint,
         devices=tuple(sorted((position, device.value) for position, device in config.track.devices.items())),
         dangos=tuple(config.dangos),
         boss_ranked=config.boss_ranked,
@@ -274,6 +276,7 @@ def _unpack_config(config: _WorkerRaceConfig, *, seed: int | None) -> RaceConfig
         length=config.track_length,
         finish=config.track_finish,
         devices={position: DeviceType(device) for position, device in config.devices},
+        midpoint=config.track_midpoint,
     )
     return RaceConfig(track=track, dangos=list(config.dangos), seed=seed, boss_ranked=config.boss_ranked)
 

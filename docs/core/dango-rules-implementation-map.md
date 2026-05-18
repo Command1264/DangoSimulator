@@ -39,6 +39,7 @@
 | 推進裝置向前 1 格 | `DeviceType.ADVANCE` | 已實作 |
 | 阻遏裝置向後 1 格 | `DeviceType.BLOCK` | 已實作 |
 | 時空裂隙重排堆疊 | `DeviceType.TIME_RIFT` / `_open_time_rift()` | 已實作；一般團子隨機重排，布大王仍固定於底部 |
+| 賽程中點標記 | `TrackConfig.midpoint` / `_parse_devices()` / `_crossed_midpoint()` | 已實作；可在 `track.devices` 設定 `type: "midpoint"`，可與同格裝置並存，多個標記只採第一個，停在中點不算經過 |
 
 ## 布大王
 
@@ -79,4 +80,5 @@
 ## 預設資料
 
 `data/default_race.json` 依 `docs/core/dango-rules.md` 的「團子技能」排序列出所有一般團子，並在每個 ability 同時保存 `id` 與 `name`。
+預設賽道在第 15 格設定 `midpoint`，並與該格阻遏裝置共存。
 前 6 顆一般團子預設參賽，其餘團子 `default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。
