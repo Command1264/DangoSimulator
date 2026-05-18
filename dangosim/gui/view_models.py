@@ -91,6 +91,16 @@ class RankingViewRow:
 
 
 @dataclass(frozen=True)
+class RoundActionViewRow:
+    order: int
+    dango_id: str
+    name: str
+    roll: int | None
+    status: str
+    avatar_label: str
+
+
+@dataclass(frozen=True)
 class RaceViewState:
     positions: dict[str, int]
     stacks: dict[int, list[str]]
@@ -101,6 +111,7 @@ class RaceViewState:
     rankings: tuple[str, ...]
     live_rankings: tuple[str, ...]
     ranking_rows: tuple[RankingViewRow, ...]
+    action_rows: tuple[RoundActionViewRow, ...]
     dango_names: dict[str, str]
     avatar_labels: dict[str, str]
     round_number: int

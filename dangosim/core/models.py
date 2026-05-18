@@ -152,3 +152,6 @@ class RaceSnapshot:
     live_rankings: tuple[str, ...]
     round_number: int
     finished: bool
+    round_order: tuple[str, ...] = ()
+    round_rolls: Mapping[str, int] = field(default_factory=dict)
+    remaining_round_order: tuple[str, ...] = ()

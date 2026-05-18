@@ -73,11 +73,11 @@ def run() -> int:
             QGraphicsView,
             QGridLayout,
             QGroupBox,
+            QHeaderView,
             QHBoxLayout,
             QLabel,
             QLineEdit,
             QListWidget,
-            QListWidgetItem,
             QMainWindow,
             QMessageBox,
             QProgressBar,
@@ -615,7 +615,8 @@ def run() -> int:
             main_splitter.addWidget(self._build_left_panel())
             main_splitter.addWidget(self._build_center_panel())
             main_splitter.addWidget(self._build_right_panel())
-            main_splitter.setSizes([280, 650, 280])
+            main_splitter.addWidget(self._build_event_panel())
+            main_splitter.setSizes([260, 620, 360, 320])
             root_layout.addWidget(main_splitter, 1)
             root_layout.addWidget(self._build_results_panel())
             self.setCentralWidget(root)
@@ -682,13 +683,31 @@ def run() -> int:
         def _build_right_panel(self) -> QWidget:
             panel = QWidget()
             layout = QVBoxLayout(panel)
-            self.ranking = QListWidget()
-            self.events = QListWidget()
+            self.ranking = QTableWidget(0, 4)
+            self.ranking.setHorizontalHeaderLabels(["名次", "團子", "格數", "狀態"])
+            self._configure_table(self.ranking)
+            self.round_actions = QTableWidget(0, 4)
+            self.round_actions.setHorizontalHeaderLabels(["順序", "團子", "骰子", "狀態"])
+            self._configure_table(self.round_actions)
             layout.addWidget(QLabel("即時名次"))
-            layout.addWidget(self.ranking)
+            layout.addWidget(self.ranking, 1)
+            layout.addWidget(QLabel("本輪行動"))
+            layout.addWidget(self.round_actions, 1)
+            return panel
+
+        def _build_event_panel(self) -> QWidget:
+            panel = QWidget()
+            layout = QVBoxLayout(panel)
+            self.events = QListWidget()
             layout.addWidget(QLabel("事件紀錄"))
             layout.addWidget(self.events, 1)
             return panel
+
+        def _configure_table(self, table: QTableWidget) -> None:
+            table.verticalHeader().setVisible(False)
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.setAlternatingRowColors(True)
+            table.setShowGrid(False)
 
         def _build_results_panel(self) -> QWidget:
             box = QGroupBox("多輪模擬")
@@ -845,17 +864,36 @@ def run() -> int:
                 f"{state.last_roll if state.last_roll is not None else '-'}"
             )
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
-            self.ranking.clear()
-            status = "完賽" if state.finished else "賽中"
-            for index, row in enumerate(state.ranking_rows, start=1):
-                item = QListWidgetItem(
-                    self.piece_icon(row.dango_id, state),
-                    f"#{index} {row.name}｜{row.position} 格｜{status}",
-                )
-                self.ranking.addItem(item)
+            self.render_ranking_table(state)
+            self.render_round_action_table(state)
             self.events.clear()
             for message in state.event_log[-80:]:
                 self.events.addItem(format_event_log_message(message))
+
+        def render_ranking_table(self, state: RaceViewState) -> None:
+            status = "完賽" if state.finished else "賽中"
+            self.ranking.setRowCount(len(state.ranking_rows))
+            for row_index, row in enumerate(state.ranking_rows):
+                self.set_table_item(self.ranking, row_index, 0, str(row_index + 1))
+                self.set_table_item(self.ranking, row_index, 1, row.name, self.piece_icon(row.dango_id, state))
+                self.set_table_item(self.ranking, row_index, 2, str(row.position))
+                self.set_table_item(self.ranking, row_index, 3, status)
+
+        def render_round_action_table(self, state: RaceViewState) -> None:
+            self.round_actions.setRowCount(len(state.action_rows))
+            for row_index, row in enumerate(state.action_rows):
+                roll_text = "-" if row.roll is None else str(row.roll)
+                self.set_table_item(self.round_actions, row_index, 0, str(row.order))
+                self.set_table_item(self.round_actions, row_index, 1, row.name, self.piece_icon(row.dango_id, state))
+                self.set_table_item(self.round_actions, row_index, 2, roll_text)
+                self.set_table_item(self.round_actions, row_index, 3, row.status)
+
+        def set_table_item(self, table: QTableWidget, row: int, column: int, text: str, icon: QIcon | None = None) -> None:
+            item = QTableWidgetItem(text)
+            if icon is not None:
+                item.setIcon(icon)
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, column, item)
 
         def piece_icon(self, dango_id: str, state: RaceViewState) -> QIcon:
             pixmap = QPixmap(26, 26)
@@ -1137,7 +1175,7 @@ def run() -> int:
 
     app = QApplication([])
     window = MainWindow()
-    window.resize(1280, 820)
+    window.resize(1480, 840)
     window.show()
     if os.environ.get("DANGOSIM_GUI_SMOKE") == "1":
         QTimer.singleShot(0, app.quit)

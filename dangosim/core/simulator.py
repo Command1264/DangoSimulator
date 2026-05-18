@@ -49,6 +49,7 @@ class RaceSimulator:
         self._finished = False
         self._used_once_abilities: set[tuple[str, str]] = set()
         self._turn_queue: list[str] = []
+        self._round_order: list[str] = []
         self._round_number = 0
         self._last_rolls: dict[str, int] = {}
         self._round_rolls: dict[str, int] = {}
@@ -124,7 +125,6 @@ class RaceSimulator:
         result = self.step_dango(dango_id, roll)
         if not self._turn_queue:
             self._finish_round()
-            self._round_rolls = {}
         return result
 
     def run_until_finished(self, max_steps: int = 1000) -> RaceSnapshot:
@@ -143,6 +143,9 @@ class RaceSimulator:
             live_rankings=self._live_rankings(),
             round_number=self._round_number,
             finished=self._finished,
+            round_order=tuple(self._round_order),
+            round_rolls=dict(self._round_rolls),
+            remaining_round_order=tuple(self._turn_queue),
         )
 
     def _take_moving_group(self, dango_id: str, position: int) -> list[str]:
@@ -178,6 +181,7 @@ class RaceSimulator:
         ]
         if not active:
             self._turn_queue = []
+            self._round_order = []
             self._round_rolls = {}
             self._round_start_bottom_dangos = set()
             return
@@ -197,6 +201,7 @@ class RaceSimulator:
         if move_last:
             active = [dango_id for dango_id in active if dango_id not in pending_move_last] + move_last
         self._turn_queue = active
+        self._round_order = list(active)
         self._event_log.append(
             EventRecord(
                 event_type="round_start",

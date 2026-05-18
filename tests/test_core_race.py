@@ -147,6 +147,39 @@ def test_first_round_order_does_not_make_boss_act_before_round_three() -> None:
     assert "boss" in third_round
 
 
+def test_snapshot_exposes_current_round_order_and_rolls_without_idle_boss() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=50, finish=50),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=2),
+                DangoConfig(id="boss", name="布大王", start_position=50, is_boss=True, ranked=False),
+            ],
+            seed=1,
+            first_round_order={"b": 1, "a": 2, "boss": 3},
+        )
+    )
+
+    simulator.step_next()
+    first_round = simulator.snapshot()
+    simulator.step_next()
+    second_round = simulator.snapshot()
+    simulator.step_next()
+    simulator.step_next()
+    simulator.step_next()
+    third_round = simulator.snapshot()
+
+    assert first_round.round_order == ("b", "a")
+    assert set(first_round.round_rolls) == {"a", "b"}
+    assert all(1 <= roll <= 3 for roll in first_round.round_rolls.values())
+    assert first_round.remaining_round_order == ("a",)
+    assert second_round.round_order == ("b", "a")
+    assert second_round.remaining_round_order == ()
+    assert "boss" in third_round.round_order
+    assert 1 <= third_round.round_rolls["boss"] <= 6
+
+
 def test_dangos_stack_when_they_land_on_the_same_cell_and_bottom_carries_top() -> None:
     simulator = RaceSimulator(make_config())
 

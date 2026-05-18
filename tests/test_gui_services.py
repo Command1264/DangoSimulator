@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dangosim.core.config_loader import load_race_config
+from dangosim.core.models import DangoConfig, RaceConfig, TrackConfig
 from dangosim.gui.services import GuiRaceController, run_batch_simulation
 from dangosim.gui.view_models import build_participant_cards, build_race_config_from_cards
 from dangosim.randomness import SeedMode
@@ -29,6 +30,36 @@ def test_gui_race_controller_exposes_initial_and_step_view_state() -> None:
     assert after_step.ranking_rows
     assert all(row.name for row in after_step.ranking_rows)
     assert all(row.avatar_label for row in after_step.ranking_rows)
+
+
+def test_gui_race_controller_exposes_round_action_rows_with_statuses() -> None:
+    controller = GuiRaceController(
+        RaceConfig(
+            track=TrackConfig(length=20, finish=20),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=2),
+            ],
+            seed=1,
+            first_round_order={"a": 1, "b": 2},
+        )
+    )
+
+    first = controller.step()
+    second = controller.step()
+
+    assert [(row.order, row.dango_id, row.status) for row in first.action_rows] == [
+        (1, "a", "目前"),
+        (2, "b", "待行動"),
+    ]
+    assert first.action_rows[0].roll == first.last_roll
+    assert all(row.roll is not None for row in first.action_rows)
+    assert first.action_rows[0].name == "A"
+    assert first.action_rows[0].avatar_label == "A"
+    assert [(row.order, row.dango_id, row.status) for row in second.action_rows] == [
+        (1, "a", "已行動"),
+        (2, "b", "目前"),
+    ]
 
 
 def test_gui_race_controller_reset_returns_to_initial_positions() -> None:

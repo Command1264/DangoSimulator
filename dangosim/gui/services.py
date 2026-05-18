@@ -9,6 +9,7 @@ from dangosim.core.simulator import RaceSimulator
 from dangosim.gui.view_models import (
     RaceViewState,
     RankingViewRow,
+    RoundActionViewRow,
     SimulationResultRow,
     avatar_label_for_name,
     dango_display_name,
@@ -115,6 +116,21 @@ def _view_state_from_snapshot(
         )
         for dango_id in snapshot.live_rankings
     )
+    remaining = set(snapshot.remaining_round_order)
+    action_rows = tuple(
+        RoundActionViewRow(
+            order=index,
+            dango_id=dango_id,
+            name=dango_display_name(dango_id, dango_names),
+            roll=snapshot.round_rolls.get(dango_id),
+            status=_round_action_status(dango_id=dango_id, remaining=remaining, last_move=last_move),
+            avatar_label=avatar_labels.get(
+                dango_id,
+                avatar_label_for_name(dango_display_name(dango_id, dango_names)),
+            ),
+        )
+        for index, dango_id in enumerate(snapshot.round_order, start=1)
+    )
     return RaceViewState(
         positions=dict(snapshot.positions),
         stacks={position: list(stack) for position, stack in snapshot.stacks.items()},
@@ -125,8 +141,17 @@ def _view_state_from_snapshot(
         rankings=tuple(snapshot.rankings),
         live_rankings=tuple(snapshot.live_rankings),
         ranking_rows=ranking_rows,
+        action_rows=action_rows,
         dango_names=dango_names,
         avatar_labels=avatar_labels,
         round_number=snapshot.round_number,
         finished=snapshot.finished,
     )
+
+
+def _round_action_status(*, dango_id: str, remaining: set[str], last_move: MoveResult | None) -> str:
+    if last_move is not None and dango_id == last_move.dango_id:
+        return "目前"
+    if dango_id in remaining:
+        return "待行動"
+    return "已行動"
