@@ -11,10 +11,10 @@
       { "position": 9, "type": "advance" },
       { "position": 13, "type": "time_rift" },
       { "position": 15, "type": "block" },
+      { "position": 16, "type": "midpoint" },
       { "position": 19, "type": "advance" },
       { "position": 22, "type": "time_rift" },
       { "position": 25, "type": "block" },
-      { "position": 25, "type": "midpoint" },
       { "position": 29, "type": "block" }
     ]
   },
@@ -181,7 +181,7 @@
           "actions": [{ "type": "builtin" }]
         }
       ],
-      "ability_note": "每場一次，經過賽程中點後傳送到前方最近非布大王團子頂端。"
+      "ability_note": "每場一次，經過賽程中點後解鎖；之後移動完成時若前方有一般團子，傳送到最近團子頂端並消耗技能。"
     },
     {
       "id": "shorekeeper",
@@ -247,7 +247,7 @@
           "actions": [{ "type": "builtin" }]
         }
       ],
-      "ability_note": "每場一次，經過賽程中點後將排名前後的非布大王團子傳送至自己的格子。"
+      "ability_note": "每場一次，經過賽程中點後解鎖；之後移動完成且不是最前/最後時，將所有一般團子拉到自己的格子。"
     },
     {
       "id": "floro",
