@@ -85,9 +85,15 @@ class RaceSimulator:
         effective_roll = before_move.steps
         ability_reasons = before_move.reasons
         carried = self._take_moving_group(dango_id, from_position)
-        base_position = self._move_position(from_position, self._forward_delta(dango_id) * effective_roll, dango_id)
+        base_delta = self._forward_delta(dango_id) * effective_roll
+        base_position = self._move_position(from_position, base_delta, dango_id)
+        if dango.is_boss:
+            self._collect_boss_passed_dangos(carried, self._movement_path(from_position, base_delta, dango_id))
         device = self.config.track.device_at(base_position)
-        to_position = self._apply_device(base_position, device, dango_id)
+        device_delta = self._device_delta(device, dango_id)
+        to_position = self._move_position(base_position, device_delta, dango_id)
+        if dango.is_boss:
+            self._collect_boss_passed_dangos(carried, self._movement_path(base_position, device_delta, dango_id))
 
         self._place_group(to_position, carried)
         self._update_boss_meeting_flags()
@@ -152,8 +158,9 @@ class RaceSimulator:
         stack = self._stacks[position]
         index = stack.index(dango_id)
         if self._dangos[dango_id].is_boss:
-            del stack[index]
-            return [dango_id]
+            group = stack[index:]
+            del stack[index:]
+            return group
         if dango_id not in self._stack_active:
             group = [dango_id]
             del stack[index]
@@ -448,13 +455,40 @@ class RaceSimulator:
             return self._wrap_position(target)
         return min(self.config.track.finish, max(1, target))
 
+    def _movement_path(self, position: int, delta: int, dango_id: str) -> tuple[int, ...]:
+        if delta == 0:
+            return ()
+        step = 1 if delta > 0 else -1
+        current = position
+        path: list[int] = []
+        for _ in range(abs(delta)):
+            current = self._move_position(current, step, dango_id)
+            path.append(current)
+            if not self._dangos[dango_id].is_boss and current in (1, self.config.track.finish):
+                break
+        return tuple(path)
+
+    def _collect_boss_passed_dangos(self, carried: list[str], path: Iterable[int]) -> None:
+        if not carried or not self._dangos[carried[0]].is_boss:
+            return
+        for position in path:
+            stack = self._stacks[position]
+            picked = [dango_id for dango_id in stack if not self._dangos[dango_id].is_boss]
+            if not picked:
+                continue
+            self._stacks[position] = [dango_id for dango_id in stack if self._dangos[dango_id].is_boss]
+            carried[1:1] = picked
+
     def _wrap_position(self, position: int) -> int:
         length = self.config.track.length
         return ((position - 1) % length) + 1
 
     def _apply_device(self, position: int, device: DeviceType, dango_id: str) -> int:
+        return self._move_position(position, self._device_delta(device, dango_id), dango_id)
+
+    def _device_delta(self, device: DeviceType, dango_id: str) -> int:
         if device in (DeviceType.BLANK, DeviceType.TIME_RIFT):
-            return position
+            return 0
 
         forward = self._forward_delta(dango_id)
         is_boss = self._dangos[dango_id].is_boss
@@ -465,7 +499,7 @@ class RaceSimulator:
         else:
             delta = 0
         delta += self._device_ability_delta(dango_id, device, forward)
-        return self._move_position(position, delta, dango_id)
+        return delta
 
     def _device_ability_delta(self, dango_id: str, device: DeviceType, forward: int) -> int:
         if not self._has_ability(dango_id, "lu_device_master"):

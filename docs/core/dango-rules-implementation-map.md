@@ -51,8 +51,8 @@
 | 行動時賽道機制對布大王生效 | `_apply_device()` | 已實作 |
 | 布大王骰 1-6 | `_roll_for()` | 已實作 |
 | 推進/阻遏對布大王效果反轉 | `_apply_device()` | 已實作 |
-| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` | 已實作；落點與時空裂隙後都會維持底部 |
-| 行動時不帶走一般團子 | `_take_moving_group()` | 已實作 |
+| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` / `_take_moving_group()` | 已實作；落點、時空裂隙與背負移動時都會維持底部 |
+| 行動經過或停在一般團子所在格時會背起並繼續移動 | `_take_moving_group()` / `_movement_path()` / `_collect_boss_passed_dangos()` | 已實作；新背起的團子會插在布大王與原背上團子之間，且保留原堆疊順序 |
 | 行動前不參與團子之間堆疊排序 | `_is_ranked_participant()` / `_live_rankings()` / `simulate_many()` | 已實作；參賽者模式下第 3 回合前不列入即時與完賽排名，批次統計會按後段名次補計 |
 | 整輪結束後，若布大王前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
 
