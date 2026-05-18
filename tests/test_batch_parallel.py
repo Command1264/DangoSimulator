@@ -47,6 +47,25 @@ def test_parallel_worker_config_preserves_track_midpoint() -> None:
     assert unpacked.track.midpoint == 6
 
 
+def test_parallel_worker_config_preserves_participant_order_overrides() -> None:
+    config = RaceConfig(
+        track=TrackConfig(length=10, finish=10),
+        dangos=[
+            DangoConfig(id="a", name="A", start_position=1),
+            DangoConfig(id="b", name="B", start_position=1),
+        ],
+        seed=7,
+        initial_stack_order={"b": 1, "a": 2},
+        first_round_order={"a": 1, "b": 2},
+    )
+
+    worker_config = _pack_config(config)
+    unpacked = _unpack_config(worker_config, seed=8)
+
+    assert unpacked.initial_stack_order == {"b": 1, "a": 2}
+    assert unpacked.first_round_order == {"a": 1, "b": 2}
+
+
 def test_parallel_simulate_many_reports_chunk_progress_to_completion() -> None:
     progress: list[tuple[int, int]] = []
 

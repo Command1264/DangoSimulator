@@ -18,9 +18,19 @@ SEED_MODES = ("fixed", "system")
 
 
 @dataclass(frozen=True)
+class ParticipantOverrideSettings:
+    dango_id: str
+    selected: bool = False
+    start_position: int | None = None
+    initial_stack_order: int | None = None
+    first_round_order: int | None = None
+
+
+@dataclass(frozen=True)
 class ParticipantSettings:
     selected_dango_ids: tuple[str, ...] = ()
     boss_mode: str = BossMode.DISRUPTOR.value
+    participant_overrides: tuple[ParticipantOverrideSettings, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,26 +92,47 @@ def apply_settings_to_cards(
 ) -> list[ParticipantCardState]:
     selected_ids = set(settings.participants.selected_dango_ids)
     boss_mode = _boss_mode(settings.participants.boss_mode)
+    max_position = max((card.start_position for card in cards), default=1)
+    overrides = {
+        override.dango_id: override
+        for override in settings.participants.participant_overrides
+    }
     if not selected_ids:
         return [
-            card.with_updates(boss_mode=boss_mode)
-            if card.is_boss
-            else card
+            _apply_participant_override(
+                card.with_updates(boss_mode=boss_mode)
+                if card.is_boss
+                else card,
+                overrides.get(card.dango_id),
+                max_position=max_position,
+            )
             for card in cards
         ]
     known_general_ids = {card.dango_id for card in cards if not card.is_boss}
     selected_ids = selected_ids & known_general_ids
     if not selected_ids:
         return [
-            card.with_updates(boss_mode=boss_mode)
-            if card.is_boss
-            else card
+            _apply_participant_override(
+                card.with_updates(boss_mode=boss_mode)
+                if card.is_boss
+                else card,
+                overrides.get(card.dango_id),
+                max_position=max_position,
+            )
             for card in cards
         ]
     return [
-        card.with_updates(selected=True, boss_mode=boss_mode)
+        _apply_participant_override(
+            card.with_updates(selected=True, boss_mode=boss_mode),
+            overrides.get(card.dango_id),
+            max_position=max_position,
+        )
         if card.is_boss
-        else card.with_updates(selected=card.dango_id in selected_ids)
+        else _apply_participant_override(
+            card.with_updates(selected=card.dango_id in selected_ids),
+            overrides.get(card.dango_id),
+            max_position=max_position,
+        )
         for card in cards
     ]
 
@@ -114,6 +145,7 @@ def _settings_from_payload(payload: dict[str, Any]) -> UserSettings:
         participants=ParticipantSettings(
             selected_dango_ids=_string_tuple(participants.get("selected_dango_ids")),
             boss_mode=_boss_mode(participants.get("boss_mode")).value,
+            participant_overrides=_participant_overrides(participants.get("participant_overrides")),
         ),
         single_race=SingleRaceSettings(
             speed_ms=_bounded_int(single_race.get("speed_ms"), MIN_SPEED_MS, MAX_SPEED_MS, 700),
@@ -132,7 +164,34 @@ def _settings_from_payload(payload: dict[str, Any]) -> UserSettings:
 def _settings_to_payload(settings: UserSettings) -> dict[str, Any]:
     payload = asdict(settings)
     payload["participants"]["selected_dango_ids"] = list(settings.participants.selected_dango_ids)
+    payload["participants"]["participant_overrides"] = [
+        asdict(override)
+        for override in settings.participants.participant_overrides
+    ]
     return payload
+
+
+def _apply_participant_override(
+    card: ParticipantCardState,
+    override: ParticipantOverrideSettings | None,
+    *,
+    max_position: int,
+) -> ParticipantCardState:
+    if override is None:
+        return card
+    start_position = (
+        override.start_position
+        if override.start_position is not None and 1 <= override.start_position <= max_position
+        else card.start_position
+    )
+    updated = card.with_updates(
+        selected=override.selected,
+        start_position=start_position,
+    )
+    return updated.with_order_updates(
+        initial_stack_order=override.initial_stack_order,
+        first_round_order=override.first_round_order,
+    )
 
 
 def _dict_value(payload: dict[str, Any], key: str) -> dict[str, Any]:
@@ -144,6 +203,28 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list):
         return ()
     return tuple(item for item in value if isinstance(item, str) and item)
+
+
+def _participant_overrides(value: Any) -> tuple[ParticipantOverrideSettings, ...]:
+    if not isinstance(value, list):
+        return ()
+    overrides: list[ParticipantOverrideSettings] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        dango_id = item.get("dango_id")
+        if not isinstance(dango_id, str) or not dango_id:
+            continue
+        overrides.append(
+            ParticipantOverrideSettings(
+                dango_id=dango_id,
+                selected=_bool_value(item.get("selected"), False),
+                start_position=_optional_positive_int(item.get("start_position")),
+                initial_stack_order=_optional_positive_int(item.get("initial_stack_order")),
+                first_round_order=_optional_positive_int(item.get("first_round_order")),
+            )
+        )
+    return tuple(overrides)
 
 
 def _boss_mode(value: Any) -> BossMode:
@@ -168,6 +249,16 @@ def _choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
 
 def _bool_value(value: Any, default: bool) -> bool:
     return value if isinstance(value, bool) else default
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 1 else None
 
 
 def _worker_setting(value: Any) -> str:

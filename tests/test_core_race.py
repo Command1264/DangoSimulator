@@ -87,6 +87,66 @@ def test_initial_stack_shuffle_keeps_boss_at_bottom() -> None:
     assert simulator.snapshot().stacks[1][0] == "boss"
 
 
+def test_initial_stack_order_override_arranges_same_cell_dangos_bottom_to_top() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=8, finish=8),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=1),
+                DangoConfig(id="c", name="C", start_position=1),
+            ],
+            seed=0,
+            initial_stack_order={"a": 2, "b": 1},
+        )
+    )
+
+    stack = simulator.snapshot().stacks[1]
+    assert stack[:2] == ["b", "a"]
+    assert set(stack) == {"a", "b", "c"}
+
+
+def test_first_round_order_override_only_applies_to_first_round() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=30, finish=30),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=2),
+                DangoConfig(id="c", name="C", start_position=3),
+            ],
+            seed=1,
+            first_round_order={"c": 1, "a": 2},
+        )
+    )
+
+    first_round = [simulator.step_next().dango_id for _ in range(3)]
+    second_round = [simulator.step_next().dango_id for _ in range(3)]
+
+    assert first_round[:2] == ["c", "a"]
+    assert second_round != ["c", "a", "b"]
+
+
+def test_first_round_order_does_not_make_boss_act_before_round_three() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=50, finish=50),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="boss", name="布大王", start_position=50, is_boss=True, ranked=False),
+            ],
+            seed=1,
+            first_round_order={"boss": 1, "a": 2},
+        )
+    )
+
+    first_two_rounds = [simulator.step_next().dango_id for _ in range(2)]
+    third_round = [simulator.step_next().dango_id for _ in range(2)]
+
+    assert first_two_rounds == ["a", "a"]
+    assert "boss" in third_round
+
+
 def test_dangos_stack_when_they_land_on_the_same_cell_and_bottom_carries_top() -> None:
     simulator = RaceSimulator(make_config())
 

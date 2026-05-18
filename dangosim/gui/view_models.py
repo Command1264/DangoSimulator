@@ -28,6 +28,9 @@ class ParticipantCardState:
     group: str
     skill_note: str
     selected: bool
+    start_position: int
+    initial_stack_order: int | None = None
+    first_round_order: int | None = None
     is_boss: bool = False
     boss_mode: BossMode = BossMode.NONE
 
@@ -42,11 +45,29 @@ class ParticipantCardState:
         *,
         selected: bool | None = None,
         boss_mode: BossMode | None = None,
+        start_position: int | None = None,
+        initial_stack_order: int | None = None,
+        first_round_order: int | None = None,
     ) -> "ParticipantCardState":
         return replace(
             self,
             selected=self.selected if selected is None else selected,
             boss_mode=self.boss_mode if boss_mode is None else boss_mode,
+            start_position=self.start_position if start_position is None else start_position,
+            initial_stack_order=initial_stack_order if initial_stack_order is not None else self.initial_stack_order,
+            first_round_order=first_round_order if first_round_order is not None else self.first_round_order,
+        ).normalized()
+
+    def with_order_updates(
+        self,
+        *,
+        initial_stack_order: int | None,
+        first_round_order: int | None,
+    ) -> "ParticipantCardState":
+        return replace(
+            self,
+            initial_stack_order=initial_stack_order,
+            first_round_order=first_round_order,
         ).normalized()
 
 
@@ -94,9 +115,10 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
             ParticipantCardState(
                 dango_id=dango.id,
                 name=dango.name,
-                group="",
+                group=participant_group_label(dango.group),
                 skill_note=dango.skill_note or "尚未設定技能摘要",
                 selected=dango.default_selected,
+                start_position=dango.start_position,
                 is_boss=is_boss,
                 boss_mode=BossMode.DISRUPTOR if is_boss else BossMode.NONE,
             ).normalized()
@@ -107,6 +129,11 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
 def avatar_label_for_name(name: str) -> str:
     stripped = name.strip()
     return stripped[0] if stripped else "?"
+
+
+def participant_group_label(group: str) -> str:
+    stripped = group.strip()
+    return "" if stripped.lower() == "wip" else stripped
 
 
 def dango_display_name(dango_id: str | None, dango_names: Mapping[str, str]) -> str:
@@ -124,6 +151,11 @@ def track_cell_tooltip(*, index: int, device: str, is_midpoint: bool) -> str:
     if is_midpoint:
         labels.append("中點")
     return f"格 {index} {' / '.join(labels)}"
+
+
+def participant_selection_summary(cards: list[ParticipantCardState]) -> str:
+    selected = [card.name for card in cards if card.selected and not card.is_boss]
+    return f"已選 {len(selected)} 顆：{'、'.join(selected) or '尚未選擇'}"
 
 
 def format_event_log_message(message: str) -> str:
@@ -152,15 +184,32 @@ def build_race_config_from_cards(config: RaceConfig, cards: list[ParticipantCard
         if dango.is_boss:
             if card.selected and card.boss_mode is not BossMode.NONE:
                 boss_ranked = card.boss_mode is BossMode.RANKED
-                selected_dangos.append(replace(dango, ranked=boss_ranked))
+                selected_dangos.append(replace(dango, ranked=boss_ranked, start_position=card.start_position))
             continue
         if card.selected:
-            selected_dangos.append(dango)
+            selected_dangos.append(replace(dango, start_position=card.start_position))
             selected_general_count += 1
 
     if selected_general_count < 1:
         raise ValueError("至少選擇 1 顆一般團子。")
-    return replace(config, dangos=selected_dangos, boss_ranked=boss_ranked)
+    selected_ids = {dango.id for dango in selected_dangos}
+    initial_stack_order = {
+        card.dango_id: card.initial_stack_order
+        for card in cards
+        if card.dango_id in selected_ids and card.initial_stack_order is not None
+    }
+    first_round_order = {
+        card.dango_id: card.first_round_order
+        for card in cards
+        if card.dango_id in selected_ids and card.first_round_order is not None
+    }
+    return replace(
+        config,
+        dangos=selected_dangos,
+        boss_ranked=boss_ranked,
+        initial_stack_order=initial_stack_order,
+        first_round_order=first_round_order,
+    )
 
 
 def rank_simulation_rows(

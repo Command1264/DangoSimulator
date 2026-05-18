@@ -96,6 +96,8 @@ class RaceConfig:
     dangos: list[DangoConfig]
     seed: int | None = None
     boss_ranked: bool = False
+    initial_stack_order: Mapping[str, int] = field(default_factory=dict)
+    first_round_order: Mapping[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.dangos:
@@ -107,6 +109,20 @@ class RaceConfig:
             if not 1 <= dango.start_position <= self.track.length:
                 raise ValueError(f"Start position for {dango.id} is outside the track.")
             seen.add(dango.id)
+        object.__setattr__(self, "initial_stack_order", MappingProxyType(_normalize_order_map(self.initial_stack_order, seen)))
+        object.__setattr__(self, "first_round_order", MappingProxyType(_normalize_order_map(self.first_round_order, seen)))
+
+
+def _normalize_order_map(raw: Mapping[str, int], known_ids: set[str]) -> dict[str, int]:
+    normalized: dict[str, int] = {}
+    for dango_id, order in raw.items():
+        if dango_id not in known_ids:
+            continue
+        order_value = int(order)
+        if order_value < 1:
+            raise ValueError("Order values must be positive integers.")
+        normalized[str(dango_id)] = order_value
+    return normalized
 
 
 @dataclass(frozen=True)

@@ -23,6 +23,8 @@ class _WorkerRaceConfig:
     devices: tuple[tuple[int, str], ...]
     dangos: tuple[DangoConfig, ...]
     boss_ranked: bool
+    initial_stack_order: tuple[tuple[str, int], ...] = ()
+    first_round_order: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -268,6 +270,8 @@ def _pack_config(config: RaceConfig) -> _WorkerRaceConfig:
         devices=tuple(sorted((position, device.value) for position, device in config.track.devices.items())),
         dangos=tuple(config.dangos),
         boss_ranked=config.boss_ranked,
+        initial_stack_order=tuple(sorted(config.initial_stack_order.items())),
+        first_round_order=tuple(sorted(config.first_round_order.items())),
     )
 
 
@@ -278,7 +282,14 @@ def _unpack_config(config: _WorkerRaceConfig, *, seed: int | None) -> RaceConfig
         devices={position: DeviceType(device) for position, device in config.devices},
         midpoint=config.track_midpoint,
     )
-    return RaceConfig(track=track, dangos=list(config.dangos), seed=seed, boss_ranked=config.boss_ranked)
+    return RaceConfig(
+        track=track,
+        dangos=list(config.dangos),
+        seed=seed,
+        boss_ranked=config.boss_ranked,
+        initial_stack_order=dict(config.initial_stack_order),
+        first_round_order=dict(config.first_round_order),
+    )
 
 
 def _resolve_chunk_size(chunk_size: int | None, *, runs: int, workers: int) -> int:

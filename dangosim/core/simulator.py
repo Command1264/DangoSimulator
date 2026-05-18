@@ -40,7 +40,7 @@ class RaceSimulator:
         for dango in config.dangos:
             self._stacks[dango.start_position].append(dango.id)
         for stack in self._stacks.values():
-            self._shuffle_stack_preserving_boss_bottom(stack)
+            self._shuffle_stack_preserving_boss_bottom(stack, self.config.initial_stack_order)
         # Initial co-location is visible as randomized stack order, but is not
         # treated as a carried stack until pieces move.
         self._stack_active: set[str] = set()
@@ -182,6 +182,8 @@ class RaceSimulator:
             self._round_start_bottom_dangos = set()
             return
         self._rng.shuffle(active)
+        if next_round == 1:
+            active = self._apply_order_override(active, self.config.first_round_order)
         move_last = [dango_id for dango_id in active if dango_id in self._last_action_next_round]
         if move_last:
             active = [dango_id for dango_id in active if dango_id not in self._last_action_next_round] + move_last
@@ -478,13 +480,22 @@ class RaceSimulator:
             )
         )
 
-    def _shuffle_stack_preserving_boss_bottom(self, stack: list[str]) -> None:
+    def _shuffle_stack_preserving_boss_bottom(self, stack: list[str], order_override=None) -> None:
         if len(stack) < 2:
             return
         bosses = [dango_id for dango_id in stack if self._dangos[dango_id].is_boss]
         regulars = [dango_id for dango_id in stack if not self._dangos[dango_id].is_boss]
         self._rng.shuffle(regulars)
+        regulars = self._apply_order_override(regulars, order_override or {})
         stack[:] = bosses + regulars
+
+    def _apply_order_override(self, dango_ids: list[str], order_override) -> list[str]:
+        if not order_override:
+            return dango_ids
+        specified = [dango_id for dango_id in dango_ids if dango_id in order_override]
+        unspecified = [dango_id for dango_id in dango_ids if dango_id not in order_override]
+        specified.sort(key=lambda dango_id: order_override[dango_id])
+        return specified + unspecified
 
     def _record_finishers(self) -> None:
         if self._finished:

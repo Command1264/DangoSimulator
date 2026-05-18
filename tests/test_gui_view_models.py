@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dangosim.core.config_loader import load_race_config
+from dangosim.core.models import DangoConfig, RaceConfig, TrackConfig
 from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
@@ -13,6 +14,7 @@ from dangosim.gui.view_models import (
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
+    participant_selection_summary,
     rank_simulation_rows,
     track_cell_tooltip,
 )
@@ -32,11 +34,12 @@ def test_build_participant_cards_selects_general_dangos_and_marks_boss_as_disrup
 
     assert len(selected) == 6
     assert any(card.dango_id == "shorekeeper" and not card.selected for card in cards)
-    assert all(card.group == "" for card in cards)
+    assert any(card.group for card in cards)
     assert boss.name == "布大王"
     assert boss.selected is True
     assert boss.boss_mode == BossMode.DISRUPTOR
     assert all(card.skill_note for card in cards)
+    assert all(card.start_position >= 1 for card in cards)
 
 
 def test_build_race_config_from_cards_uses_selected_general_dangos_and_boss_mode() -> None:
@@ -54,6 +57,67 @@ def test_build_race_config_from_cards_uses_selected_general_dangos_and_boss_mode
     assert [dango.id for dango in race_config.dangos] == ["lu", "fei", "boss"]
     assert race_config.boss_ranked is True
     assert next(dango for dango in race_config.dangos if dango.id == "boss").ranked is True
+
+
+def test_build_race_config_from_cards_applies_start_and_order_overrides() -> None:
+    config = _default_config()
+    cards = []
+    for card in build_participant_cards(config):
+        if card.dango_id == "lu":
+            cards.append(
+                card.with_updates(
+                    selected=True,
+                    start_position=4,
+                    initial_stack_order=2,
+                    first_round_order=1,
+                )
+            )
+        elif card.dango_id == "fei":
+            cards.append(
+                card.with_updates(
+                    selected=True,
+                    start_position=4,
+                    initial_stack_order=1,
+                    first_round_order=2,
+                )
+            )
+        elif card.is_boss:
+            cards.append(card.with_updates(selected=True, boss_mode=BossMode.DISRUPTOR))
+        else:
+            cards.append(card.with_updates(selected=False))
+
+    race_config = build_race_config_from_cards(config, cards)
+
+    assert {dango.id: dango.start_position for dango in race_config.dangos}["lu"] == 4
+    assert {dango.id: dango.start_position for dango in race_config.dangos}["fei"] == 4
+    assert race_config.initial_stack_order == {"lu": 2, "fei": 1}
+    assert race_config.first_round_order == {"lu": 1, "fei": 2}
+
+
+def test_build_race_config_from_cards_does_not_limit_selected_dango_count() -> None:
+    config = _default_config()
+    general_ids = [dango.id for dango in config.dangos if not dango.is_boss][:7]
+    cards = [
+        card.with_updates(selected=card.dango_id in general_ids)
+        if not card.is_boss
+        else card.with_updates(selected=True, boss_mode=BossMode.DISRUPTOR)
+        for card in build_participant_cards(config)
+    ]
+
+    race_config = build_race_config_from_cards(config, cards)
+
+    assert [dango.id for dango in race_config.dangos if not dango.is_boss] == general_ids
+
+
+def test_build_participant_cards_hides_wip_group_labels() -> None:
+    cards = build_participant_cards(
+        RaceConfig(
+            track=TrackConfig(length=8, finish=8),
+            dangos=[DangoConfig(id="draft", name="Draft", start_position=1, group="WIP")],
+        )
+    )
+
+    assert cards[0].group == ""
 
 
 def test_rank_simulation_rows_uses_70_30_weighted_score() -> None:
@@ -94,6 +158,21 @@ def test_visible_dango_name_fallback_does_not_expose_id() -> None:
     assert dango_display_name(None, {}) == "-"
 
 
+def test_participant_selection_summary_has_no_upper_limit_text() -> None:
+    cards = [
+        ParticipantCardState("a", "A", "二週年", "A skill", True, start_position=1),
+        ParticipantCardState("b", "B", "二週年", "B skill", True, start_position=1),
+        ParticipantCardState("c", "C", "二週年", "C skill", True, start_position=1),
+        ParticipantCardState("d", "D", "二週年", "D skill", True, start_position=1),
+        ParticipantCardState("e", "E", "二週年", "E skill", True, start_position=1),
+        ParticipantCardState("f", "F", "二週年", "F skill", True, start_position=1),
+        ParticipantCardState("g", "G", "二週年", "G skill", True, start_position=1),
+    ]
+
+    assert participant_selection_summary(cards).startswith("已選 7 顆")
+    assert "/6" not in participant_selection_summary(cards)
+
+
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:
     assert is_auto_play_control_enabled(single_race_active=False, batch_running=False) is True
     assert is_auto_play_control_enabled(single_race_active=True, batch_running=False) is True
@@ -113,6 +192,7 @@ def test_participant_card_state_rejects_ranked_boss_mode_for_non_boss() -> None:
         group="A組",
         skill_note="測試",
         selected=True,
+        start_position=1,
         is_boss=False,
         boss_mode=BossMode.RANKED,
     )

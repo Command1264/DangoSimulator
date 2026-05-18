@@ -26,6 +26,7 @@ from dangosim.gui.services import BatchSimulationResult, GuiRaceController, run_
 from dangosim.gui.settings import (
     BatchSimulationSettings,
     MAX_BATCH_RUNS,
+    ParticipantOverrideSettings,
     ParticipantSettings,
     SingleRaceSettings,
     UserSettings,
@@ -44,6 +45,7 @@ from dangosim.gui.view_models import (
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
+    participant_selection_summary,
     track_cell_tooltip,
 )
 from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
@@ -61,11 +63,14 @@ def run() -> int:
             QApplication,
             QCheckBox,
             QComboBox,
+            QDialog,
+            QDialogButtonBox,
             QFrame,
             QGraphicsEllipseItem,
             QGraphicsScene,
             QGraphicsTextItem,
             QGraphicsView,
+            QGridLayout,
             QGroupBox,
             QHBoxLayout,
             QLabel,
@@ -308,24 +313,55 @@ def run() -> int:
                 self.addItem(label)
 
     class ParticipantCard(QFrame):
-        def __init__(self, state: ParticipantCardState, on_change: Callable[[], None]) -> None:
+        def __init__(
+            self,
+            state: ParticipantCardState,
+            on_change: Callable[[], None],
+            *,
+            track_length: int,
+            order_limit: int,
+        ) -> None:
             super().__init__()
             self.state = state
             self.on_change = on_change
+            self.track_length = track_length
+            self.order_limit = max(1, order_limit)
             self.setFrameShape(QFrame.Shape.StyledPanel)
-            self.setStyleSheet("QFrame { border-radius: 6px; padding: 6px; }")
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
             layout = QVBoxLayout(self)
             header = QHBoxLayout()
-            self.checkbox = QCheckBox(state.name)
+            self.checkbox = QCheckBox()
             self.checkbox.setChecked(state.selected)
             self.checkbox.setEnabled(not state.is_boss)
-            header.addWidget(self.checkbox)
+            header.addWidget(self.checkbox, 0)
+            avatar = QLabel(avatar_label_for_name(state.name))
+            avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            avatar.setFixedSize(42, 42)
+            avatar.setStyleSheet("border-radius: 21px; background: #d9effa; font-weight: 700;")
+            header.addWidget(avatar, 0)
+            name = QLabel(state.name)
+            name.setWordWrap(True)
+            name.setStyleSheet("font-weight: 700;")
+            header.addWidget(name, 1)
             if state.group:
-                header.addWidget(QLabel(state.group))
+                group = QLabel(state.group)
+                group.setStyleSheet("border-radius: 10px; padding: 2px 7px; background: #e4f4fb; color: #3d6980;")
+                header.addWidget(group, 0)
             layout.addLayout(header)
             note = QLabel(state.skill_note)
             note.setWordWrap(True)
             layout.addWidget(note)
+            self.position = QSpinBox()
+            self.position.setRange(1, self.track_length)
+            self.position.setValue(min(max(1, state.start_position), self.track_length))
+            self.stack_order = self._order_combo(state.initial_stack_order)
+            self.first_round_order = self._order_combo(state.first_round_order)
+            layout.addWidget(QLabel("初始位置"))
+            layout.addWidget(self.position)
+            layout.addWidget(QLabel("初始堆疊"))
+            layout.addWidget(self.stack_order)
+            layout.addWidget(QLabel("首回合順序"))
+            layout.addWidget(self.first_round_order)
             self.mode = QComboBox()
             self.mode.addItem("干擾者", BossMode.DISRUPTOR.value)
             self.mode.addItem("參賽者", BossMode.RANKED.value)
@@ -333,16 +369,140 @@ def run() -> int:
             self.mode.setCurrentIndex(1 if state.boss_mode is BossMode.RANKED else 0)
             layout.addWidget(self.mode)
             self.checkbox.stateChanged.connect(self._changed)
+            self.position.valueChanged.connect(self._changed)
+            self.stack_order.currentIndexChanged.connect(self._changed)
+            self.first_round_order.currentIndexChanged.connect(self._changed)
             self.mode.currentIndexChanged.connect(self._changed)
+            self._refresh_card_state()
+
+        def _order_combo(self, value: int | None) -> QComboBox:
+            combo = QComboBox()
+            combo.addItem("隨機", None)
+            for order in range(1, self.order_limit + 1):
+                combo.addItem(str(order), order)
+            if value is not None:
+                index = combo.findData(value)
+                if index >= 0:
+                    combo.setCurrentIndex(index)
+            return combo
+
+        def mousePressEvent(self, event) -> None:
+            child = self.childAt(event.position().toPoint())
+            if any(
+                self._is_child_widget(child, widget)
+                for widget in [self.checkbox, self.position, self.stack_order, self.first_round_order, self.mode]
+            ):
+                super().mousePressEvent(event)
+                return
+            if self.state.is_boss:
+                event.accept()
+                return
+            self.checkbox.setChecked(not self.checkbox.isChecked())
+            event.accept()
+
+        def _is_child_widget(self, child, widget) -> bool:
+            while child is not None:
+                if child is widget:
+                    return True
+                child = child.parentWidget()
+            return False
 
         def _changed(self) -> None:
             mode = BossMode(self.mode.currentData()) if self.state.is_boss else BossMode.NONE
-            self.state = self.state.with_updates(selected=self.checkbox.isChecked(), boss_mode=mode)
+            self.state = self.state.with_updates(
+                selected=self.checkbox.isChecked(),
+                boss_mode=mode,
+                start_position=self.position.value(),
+            ).with_order_updates(
+                initial_stack_order=self.stack_order.currentData(),
+                first_round_order=self.first_round_order.currentData(),
+            )
+            self._refresh_card_state()
             self.on_change()
 
         def set_editing_enabled(self, enabled: bool) -> None:
-            self.checkbox.setEnabled(enabled and not self.state.is_boss)
-            self.mode.setEnabled(enabled)
+            self.setEnabled(enabled)
+
+        def _refresh_card_state(self) -> None:
+            if self.checkbox.isChecked() != self.state.selected:
+                self.checkbox.blockSignals(True)
+                self.checkbox.setChecked(self.state.selected)
+                self.checkbox.blockSignals(False)
+            controls_enabled = self.state.selected
+            for widget in [self.position, self.stack_order, self.first_round_order, self.mode]:
+                widget.setEnabled(controls_enabled)
+            border = "#5db7e8" if self.state.selected else "#c9dce8"
+            background = "#eefaff" if self.state.selected else "#f5fafc"
+            self.setStyleSheet(
+                "QFrame {"
+                f"border: 2px solid {border};"
+                "border-radius: 8px;"
+                "padding: 6px;"
+                f"background: {background};"
+                "}"
+            )
+
+    class ParticipantSetupDialog(QDialog):
+        def __init__(self, cards: list[ParticipantCardState], *, track_length: int, parent: QWidget | None = None) -> None:
+            super().__init__(parent)
+            self.setWindowTitle("自訂參賽團子")
+            self.resize(760, 680)
+            self.card_widgets: list[ParticipantCard] = []
+            layout = QVBoxLayout(self)
+            header = QHBoxLayout()
+            title = QVBoxLayout()
+            title_label = QLabel("自訂參賽團子")
+            title_label.setStyleSheet("font-size: 20px; font-weight: 700;")
+            self.count_label = QLabel()
+            title.addWidget(title_label)
+            title.addWidget(self.count_label)
+            header.addLayout(title, 1)
+            header.addWidget(QLabel("地圖"))
+            self.map_selector = QComboBox()
+            self.map_selector.addItem("預設賽道")
+            self.map_selector.setEnabled(False)
+            header.addWidget(self.map_selector)
+            layout.addLayout(header)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            body = QWidget()
+            grid = QGridLayout(body)
+            columns = 4
+            for index, card in enumerate(cards):
+                widget = ParticipantCard(
+                    card,
+                    self._card_changed,
+                    track_length=track_length,
+                    order_limit=len(cards),
+                )
+                self.card_widgets.append(widget)
+                grid.addWidget(widget, index // columns, index % columns)
+            scroll.setWidget(body)
+            layout.addWidget(scroll, 1)
+
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            buttons.button(QDialogButtonBox.StandardButton.Ok).setText("確認")
+            buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+            buttons.accepted.connect(self._accept_if_valid)
+            buttons.rejected.connect(self.reject)
+            layout.addWidget(buttons)
+            self._refresh_count()
+
+        def cards(self) -> list[ParticipantCardState]:
+            return [widget.state for widget in self.card_widgets]
+
+        def _card_changed(self) -> None:
+            self._refresh_count()
+
+        def _refresh_count(self) -> None:
+            self.count_label.setText(participant_selection_summary(self.cards()))
+
+        def _accept_if_valid(self) -> None:
+            if not any(card.selected and not card.is_boss for card in self.cards()):
+                QMessageBox.warning(self, "設定錯誤", "至少選擇 1 顆一般團子。")
+                return
+            self.accept()
 
     class SimulationWorker(QThread):
         finished_with_result = Signal(object)
@@ -442,20 +602,13 @@ def run() -> int:
             panel = QWidget()
             layout = QVBoxLayout(panel)
             layout.addWidget(QLabel("參賽團子"))
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            body = QWidget()
-            body_layout = QVBoxLayout(body)
-            for card in self.cards:
-                widget = ParticipantCard(card, self._sync_cards_from_widgets)
-                self.card_widgets.append(widget)
-                body_layout.addWidget(widget)
-            body_layout.addStretch()
-            scroll.setWidget(body)
-            layout.addWidget(scroll, 1)
             self.selected_summary = QLabel()
             self.selected_summary.setWordWrap(True)
             layout.addWidget(self.selected_summary)
+            self.participant_setup_button = QPushButton("自訂參賽團子")
+            self.participant_setup_button.clicked.connect(self.open_participant_setup)
+            layout.addWidget(self.participant_setup_button)
+            layout.addStretch()
             return panel
 
         def _build_center_panel(self) -> QWidget:
@@ -565,12 +718,25 @@ def run() -> int:
             self.refresh_selected_summary()
             self.persist_user_settings()
 
+        def open_participant_setup(self) -> None:
+            dialog = ParticipantSetupDialog(
+                self.cards,
+                track_length=self.base_config.track.length,
+                parent=self,
+            )
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            self.cards = dialog.cards()
+            self.refresh_selected_summary()
+            self.persist_user_settings()
+            if not self.single_race_active and not self.batch_running:
+                self.reset_race()
+
         def selected_config(self) -> RaceConfig:
             return build_race_config_from_cards(self.base_config, self.cards)
 
         def refresh_selected_summary(self) -> None:
-            selected = [card.name for card in self.cards if card.selected and not card.is_boss]
-            self.selected_summary.setText(f"已選 {len(selected)} 顆：{'、'.join(selected) or '尚未選擇'}")
+            self.selected_summary.setText(participant_selection_summary(self.cards))
 
         def start_race(self) -> None:
             try:
@@ -830,8 +996,7 @@ def run() -> int:
             self.sort_mode.setEnabled(True)
 
         def set_participant_controls_enabled(self, enabled: bool) -> None:
-            for widget in self.card_widgets:
-                widget.set_editing_enabled(enabled)
+            self.participant_setup_button.setEnabled(enabled)
 
         def format_duration(self, seconds: float) -> str:
             seconds = max(0, int(round(seconds)))
@@ -897,6 +1062,16 @@ def run() -> int:
                 participants=ParticipantSettings(
                     selected_dango_ids=selected_ids,
                     boss_mode=boss_mode,
+                    participant_overrides=tuple(
+                        ParticipantOverrideSettings(
+                            dango_id=card.dango_id,
+                            selected=card.selected,
+                            start_position=card.start_position,
+                            initial_stack_order=card.initial_stack_order,
+                            first_round_order=card.first_round_order,
+                        )
+                        for card in self.cards
+                    ),
                 ),
                 single_race=SingleRaceSettings(speed_ms=self.speed.value(), auto_play=self.auto_play.isChecked()),
                 batch_simulation=BatchSimulationSettings(
