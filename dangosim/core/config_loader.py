@@ -18,7 +18,7 @@ class ConfigValidationError(ValueError):
     pass
 
 
-ALLOWED_ABILITY_TRIGGERS = {"before_move", "after_move", "after_roll", "round_start", "on_device"}
+ALLOWED_ABILITY_TRIGGERS = {"before_move", "after_move", "after_roll", "round_start", "round_end", "on_device"}
 ALLOWED_ABILITY_CONDITIONS = {"always"}
 ALLOWED_ABILITY_ACTIONS = {"add_steps", "builtin"}
 

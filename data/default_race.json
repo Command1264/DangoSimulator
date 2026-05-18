@@ -275,12 +275,12 @@
         {
           "id": "changli_strategic_delay",
           "name": "謀而後定",
-          "trigger": "round_start",
+          "trigger": "round_end",
           "probability": 0.65,
           "actions": [{ "type": "builtin" }]
         }
       ],
-      "ability_note": "如果下方堆疊其他團子，下一回合有 65% 機率最後一個行動。"
+      "ability_note": "回合結束時，如果下方堆疊其他團子，下一回合有 65% 機率最後一個行動。"
     },
     {
       "id": "jinhsi",
@@ -292,12 +292,12 @@
         {
           "id": "jinhsi_magistrate_name",
           "name": "令尹之名",
-          "trigger": "before_move",
+          "trigger": "round_end",
           "probability": 0.4,
           "actions": [{ "type": "builtin" }]
         }
       ],
-      "ability_note": "如果頭頂堆疊其他團子，有 40% 機率移動到所有團子的最上方。"
+      "ability_note": "回合結束時，如果頭頂堆疊其他團子，有 40% 機率移動到所有團子的最上方。"
     },
     {
       "id": "calcharo",

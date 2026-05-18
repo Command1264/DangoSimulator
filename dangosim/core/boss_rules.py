@@ -13,8 +13,12 @@ def should_boss_return_to_finish(
     if boss_position == finish:
         return False
 
+    regular_position_set = set(regular_positions)
+    if boss_position in regular_position_set:
+        return False
+
     positions_ahead = set(_positions_before_finish_in_boss_direction(boss_position, finish=finish, length=length))
-    return positions_ahead.isdisjoint(regular_positions)
+    return positions_ahead.isdisjoint(regular_position_set)
 
 
 def _positions_before_finish_in_boss_direction(

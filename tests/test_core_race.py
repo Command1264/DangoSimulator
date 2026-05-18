@@ -376,7 +376,7 @@ def test_boss_inserts_newly_passed_dangos_between_boss_and_carried_stack() -> No
     assert snapshot.stacks[6] == ["boss", "lower", "upper", "carried"]
 
 
-def test_boss_returns_to_finish_after_round_when_no_regular_remains_ahead_before_finish() -> None:
+def test_boss_stays_after_round_when_carrying_regular_on_same_position() -> None:
     simulator = RaceSimulator(
         RaceConfig(
             track=TrackConfig(length=12, finish=12),
@@ -393,7 +393,30 @@ def test_boss_returns_to_finish_after_round_when_no_regular_remains_ahead_before
     simulator._finish_round()
 
     snapshot = simulator.snapshot()
+    assert snapshot.positions["boss"] == 8
+    assert snapshot.positions["a"] == 8
+    assert snapshot.stacks[8] == ["boss", "a"]
+    assert all(event.event_type != "boss_return" for event in snapshot.event_log)
+
+
+def test_boss_returns_to_finish_after_round_when_no_regular_remains_ahead_or_on_same_position() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=12, finish=12),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=9),
+                DangoConfig(id="boss", name="布大王", start_position=8, is_boss=True, ranked=False),
+            ],
+            seed=4,
+        )
+    )
+
+    simulator._round_number = 3
+    simulator._finish_round()
+
+    snapshot = simulator.snapshot()
     assert snapshot.positions["boss"] == 12
+    assert snapshot.positions["a"] == 9
     assert snapshot.event_log[-1].event_type == "boss_return"
 
 
