@@ -127,6 +127,7 @@ def _parse_abilities(raw_abilities: Any) -> list[AbilityConfig]:
             abilities.append(
                 AbilityConfig(
                     id=ability_id,
+                    name=str(raw.get("name", ability_id)),
                     trigger=trigger,
                     conditions=conditions,
                     actions=actions,

@@ -253,3 +253,194 @@ def test_floro_bottom_bonus_requires_an_actual_stack() -> None:
 
     assert "ability:floro_bottom_bonus" not in result.reasons
     assert result.to_position == 1 + result.roll
+
+
+def test_chisaki_gains_bonus_when_roll_is_round_minimum() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {
+                "id": "chisaki",
+                "name": "千咲",
+                "start_position": 1,
+                "abilities": [{"id": "chisaki_threshold_analysis", "name": "視閾解明", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "other", "name": "Other", "start_position": 1},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    simulator._round_rolls = {"chisaki": 1, "other": 3}
+    result = simulator.step_dango("chisaki", 1)
+
+    assert "ability:chisaki_threshold_analysis" in result.reasons
+    assert result.to_position == 4
+
+
+def test_chisaki_compares_against_full_round_roll_snapshot_after_others_act() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {"id": "other", "name": "Other", "start_position": 1},
+            {
+                "id": "chisaki",
+                "name": "千咲",
+                "start_position": 1,
+                "abilities": [{"id": "chisaki_threshold_analysis", "name": "視閾解明", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    simulator._turn_queue = ["other", "chisaki"]
+    simulator._round_number = 1
+    simulator._round_rolls = {"other": 1, "chisaki": 2}
+
+    simulator.step_next()
+    result = simulator.step_next()
+
+    assert "ability:chisaki_threshold_analysis" not in result.reasons
+    assert result.to_position == 3
+
+
+def test_moning_rolls_three_two_one_cycle() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {
+                "id": "moning",
+                "name": "莫寧",
+                "start_position": 1,
+                "abilities": [{"id": "moning_precision_calculation", "name": "精密演算", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            }
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    rolls = [simulator.step_next().roll for _ in range(4)]
+
+    assert rolls == [3, 2, 1, 3]
+
+
+def test_augusta_skips_current_turn_and_moves_last_next_round_when_top_of_stack() -> None:
+    payload = {
+        "track": {"length": 30, "finish": 30, "devices": []},
+        "dangos": [
+            {"id": "bottom", "name": "Bottom", "start_position": 1},
+            {
+                "id": "augusta",
+                "name": "奧古斯塔",
+                "start_position": 1,
+                "abilities": [{"id": "augusta_governor_authority", "name": "總督權柄", "trigger": "round_start", "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "other", "name": "Other", "start_position": 2},
+        ],
+        "seed": 0,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    first_round_results = [simulator.step_next() for _ in range(3)]
+    augusta_result = next(result for result in first_round_results if result.dango_id == "augusta")
+
+    assert augusta_result.to_position == 1
+    assert "ability:augusta_governor_authority" in augusta_result.reasons
+
+    simulator.step_next()
+    round_events = [event for event in simulator.snapshot().event_log if event.event_type == "round_start"]
+
+    assert round_events[-1].data["order"][-1] == "augusta"
+
+
+def test_yuno_teleports_adjacent_ranked_regulars_to_self_after_crossing_midpoint() -> None:
+    payload = {
+        "track": {"length": 10, "finish": 10, "devices": []},
+        "dangos": [
+            {"id": "ahead", "name": "Ahead", "start_position": 8},
+            {
+                "id": "yuno",
+                "name": "尤諾",
+                "start_position": 4,
+                "abilities": [{"id": "yuno_anchor_fate", "name": "錨定命途", "trigger": "after_move", "once_per_race": True, "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "behind", "name": "Behind", "start_position": 2},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    simulator.step_dango("yuno", 2)
+    snapshot = simulator.snapshot()
+
+    assert snapshot.positions["ahead"] == 6
+    assert snapshot.positions["behind"] == 6
+    assert snapshot.stacks[6] == ["yuno", "behind", "ahead"]
+
+
+def test_changli_moves_last_next_round_when_stacked_above_another_dango() -> None:
+    payload = {
+        "track": {"length": 30, "finish": 30, "devices": []},
+        "dangos": [
+            {"id": "bottom", "name": "Bottom", "start_position": 1},
+            {
+                "id": "changli",
+                "name": "長離",
+                "start_position": 1,
+                "abilities": [{"id": "changli_strategic_delay", "name": "謀而後定", "trigger": "round_start", "probability": 1.0, "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "other", "name": "Other", "start_position": 2},
+        ],
+        "seed": 0,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    for _ in range(3):
+        simulator.step_next()
+
+    simulator.step_next()
+    round_events = [event for event in simulator.snapshot().event_log if event.event_type == "round_start"]
+
+    assert round_events[-1].data["order"][-1] == "changli"
+
+
+def test_jinhsi_moves_to_stack_top_before_moving() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {
+                "id": "jinhsi",
+                "name": "今汐",
+                "start_position": 1,
+                "abilities": [{"id": "jinhsi_magistrate_name", "name": "令尹之名", "trigger": "before_move", "probability": 1.0, "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "top", "name": "Top", "start_position": 1},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_dango("jinhsi", 1)
+    snapshot = simulator.snapshot()
+
+    assert result.carried == ("jinhsi",)
+    assert snapshot.positions["jinhsi"] == 2
+    assert snapshot.positions["top"] == 1
+    assert snapshot.stacks[1] == ["top"]
+
+
+def test_calcharo_gains_bonus_when_starting_move_in_last_place() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {"id": "ahead", "name": "Ahead", "start_position": 5},
+            {
+                "id": "calcharo",
+                "name": "卡卡羅",
+                "start_position": 1,
+                "abilities": [{"id": "calcharo_shadow_follow", "name": "如影隨形", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_dango("calcharo", 1)
+
+    assert "ability:calcharo_shadow_follow" in result.reasons
+    assert result.to_position == 5

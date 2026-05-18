@@ -18,6 +18,32 @@ def test_default_race_json_is_loadable() -> None:
     assert any(dango.is_boss for dango in config.dangos)
 
 
+def test_default_race_json_orders_dangos_like_rules_and_names_abilities() -> None:
+    config = load_race_config(Path("data/default_race.json").read_text(encoding="utf-8"))
+
+    assert [dango.name for dango in config.dangos if not dango.is_boss] == [
+        "陸・赫斯團子",
+        "西格莉卡團子",
+        "達妮亞團子",
+        "緋雪團子",
+        "卡提希婭團子",
+        "菲比團子",
+        "千咲團子",
+        "莫寧團子",
+        "琳奈團子",
+        "愛彌斯團子",
+        "守岸人團子",
+        "珂萊塔團子",
+        "奧古斯塔團子",
+        "尤諾團子",
+        "弗洛洛團子",
+        "長離團子",
+        "今汐團子",
+        "卡卡羅團子",
+    ]
+    assert all(ability.name for dango in config.dangos for ability in dango.abilities)
+
+
 def test_cli_simulate_writes_json_summary(tmp_path: Path) -> None:
     output_path = tmp_path / "result.json"
 

@@ -35,10 +35,17 @@
 - `aemiss_ghost`：愛彌斯每場一次，越過賽程中點後傳送到前方最近一般團子頂端。
 - `snow_bird`：緋雪遇到布大王後，後續每次移動額外前進 1 格。
 - `lu_device_master`：陸赫斯觸發推進時額外前進 3 格，觸發阻遏時額外後退 1 格。
-- `daphne_same_roll_bonus`：達妮婭若骰出與上次相同點數，額外前進 2 格。
+- `daphne_same_roll_bonus`：達妮亞若骰出與上次相同點數，額外前進 2 格。
 - `kat_activate_late_surge` / `kat_late_surge_bonus`：卡提希婭每場最多一次在最後一名時進入追趕狀態，後續 60% 額外前進 2 格。
-- `phoebe_bonus` / `chisaki_bonus`：菲比、千咲 50% 額外前進 1 格。
+- `phoebe_bonus`：菲比 50% 額外前進 1 格。
+- `chisaki_threshold_analysis`：千咲若本輪骰點為最低之一，額外前進 2 格。
+- `moning_precision_calculation`：莫寧骰點固定以 3 / 2 / 1 循環。
 - `colletta_double_authority`：珂萊塔 28% 以雙倍點數移動。
+- `augusta_governor_authority`：奧古斯塔回合開始時若在堆疊最頂端，本回合不行動且下回合最後行動。
+- `yuno_anchor_fate`：尤諾每場一次越過賽程中點後，將排名前後的非布大王團子傳送至自己的格子。
+- `changli_strategic_delay`：長離若下方堆疊其他團子，下回合有 65% 機率最後行動。
+- `jinhsi_magistrate_name`：今汐若頭頂堆疊其他團子，有 40% 機率先移到堆疊最上方。
+- `calcharo_shadow_follow`：卡卡羅開始移動時若為最後一名，額外前進 3 格。
 
 ## 假設
 

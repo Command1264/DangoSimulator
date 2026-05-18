@@ -57,20 +57,26 @@
 
 | 團子 | Ability id | 對應元件 | 狀態 |
 | --- | --- | --- | --- |
-| 西格莉卡 | `sigurd_sun_help` | `_apply_round_start_abilities()` | 已實作 |
-| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_is_bottom_of_stack()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定，且同格至少 2 顆才算堆疊 |
-| 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
-| 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
-| 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
-| 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |
 | 陸赫斯 | `lu_device_master` | `_device_ability_delta()` | 已實作 |
-| 達妮婭 | `daphne_same_roll_bonus` | `_apply_builtin_before_move()` | 已實作 |
+| 西格莉卡 | `sigurd_sun_help` | `_apply_round_start_abilities()` | 已實作 |
+| 達妮亞 | `daphne_same_roll_bonus` | `_apply_builtin_before_move()` | 已實作 |
+| 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |
 | 卡提希婭 | `kat_activate_late_surge`, `kat_late_surge_bonus` | `_apply_after_move_abilities()` / `_apply_builtin_before_move()` | 已實作 |
 | 菲比 | `phoebe_bonus` | `_apply_builtin_before_move()` | 已實作 |
-| 千咲 | `chisaki_bonus` | `_apply_builtin_before_move()` | 已實作 |
+| 千咲 | `chisaki_threshold_analysis` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；使用本輪預擲骰點判定最低骰點之一 |
+| 莫寧 | `moning_precision_calculation` | `_roll_for()` | 已實作 |
+| 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
+| 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
+| 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
 | 珂萊塔 | `colletta_double_authority` | `_apply_builtin_before_move()` | 已實作 |
+| 奧古斯塔 | `augusta_governor_authority` | `_apply_round_start_abilities()` / `_apply_before_move_abilities()` | 已實作；同格至少 2 顆才算堆疊最頂端 |
+| 尤諾 | `yuno_anchor_fate` | `_apply_after_move_abilities()` / `_move_ranked_targets_to_position()` | 已實作 |
+| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_is_bottom_of_stack()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定，且同格至少 2 顆才算堆疊 |
+| 長離 | `changli_strategic_delay` | `_apply_round_start_abilities()` | 已實作；同格至少 2 顆且下方有團子才算觸發條件 |
+| 今汐 | `jinhsi_magistrate_name` | `_apply_builtin_before_move()` / `_move_to_stack_top()` | 已實作；同格至少 2 顆且頭頂有團子才算觸發條件 |
+| 卡卡羅 | `calcharo_shadow_follow` | `_apply_builtin_before_move()` / `_is_last_regular()` | 已實作 |
 
 ## 預設資料
 
-`data/default_race.json` 預設勾選 A 組 6 顆一般團子與布大王干擾者。
-文件列出的其它 WIP 團子也已加入資料檔，`default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。
+`data/default_race.json` 依 `docs/core/dango-rules.md` 的「團子技能」排序列出所有一般團子，並在每個 ability 同時保存 `id` 與 `name`。
+前 6 顆一般團子預設參賽，其餘團子 `default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。

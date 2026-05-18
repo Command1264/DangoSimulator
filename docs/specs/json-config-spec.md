@@ -18,6 +18,8 @@
 - 裝置 type 必須是已知 enum。
 - 團子 id 必須唯一。
 - 起始位置必須合法。
+- 能力 `id` 必須供程式碼與 JSON 規則引用。
+- 能力 `name` 是 GUI 與事件紀錄顯示名稱；若舊 JSON 未提供，載入時會回退顯示 `id`。
 - 未知能力 action 必須報錯。
 
 ## Ability Trigger 白名單

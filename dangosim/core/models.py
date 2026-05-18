@@ -51,6 +51,7 @@ class AbilityAction:
 class AbilityConfig:
     id: str
     trigger: str
+    name: str = ""
     conditions: tuple[AbilityCondition, ...] = ()
     actions: tuple[AbilityAction, ...] = ()
     probability: float = 1.0
@@ -59,6 +60,8 @@ class AbilityConfig:
     def __post_init__(self) -> None:
         if not self.id:
             raise ValueError("Ability id is required.")
+        if not self.name:
+            object.__setattr__(self, "name", self.id)
         if not 0 <= self.probability <= 1:
             raise ValueError("Ability probability must be between 0 and 1.")
 

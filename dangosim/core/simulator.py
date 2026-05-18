@@ -5,13 +5,14 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from dangosim.core.boss_rules import should_boss_return_to_finish
-from dangosim.core.models import DeviceType, EventRecord, MoveResult, RaceConfig, RaceSnapshot
+from dangosim.core.models import AbilityConfig, DeviceType, EventRecord, MoveResult, RaceConfig, RaceSnapshot
 
 
 @dataclass(frozen=True)
 class _BuiltinBeforeMoveResult:
     steps: int
     skip_movement: bool = False
+    triggered: bool = False
 
 
 @dataclass(frozen=True)
@@ -39,9 +40,13 @@ class RaceSimulator:
         self._turn_queue: list[str] = []
         self._round_number = 0
         self._last_rolls: dict[str, int] = {}
+        self._round_rolls: dict[str, int] = {}
+        self._fixed_roll_indices: dict[str, int] = {}
         self._ability_flags: dict[str, set[str]] = {dango.id: set() for dango in config.dangos}
         self._round_step_penalties: dict[str, int] = {}
         self._round_start_bottom_dangos: set[str] = set()
+        self._skip_turn_dangos: set[str] = set()
+        self._last_action_next_round: set[str] = set()
 
     def step_dango(self, dango_id: str, roll: int) -> MoveResult:
         if dango_id not in self._dangos:
@@ -103,9 +108,12 @@ class RaceSimulator:
 
     def step_next(self) -> MoveResult:
         dango_id = self._next_actor()
-        result = self.step_dango(dango_id, self._roll_for(dango_id))
+        had_precomputed_roll = dango_id in self._round_rolls
+        roll = self._round_rolls[dango_id] if had_precomputed_roll else self._roll_for(dango_id)
+        result = self.step_dango(dango_id, roll)
         if not self._turn_queue:
             self._finish_round()
+            self._round_rolls = {}
         return result
 
     def run_until_finished(self, max_steps: int = 1000) -> RaceSnapshot:
@@ -159,15 +167,22 @@ class RaceSimulator:
         ]
         if not active:
             self._turn_queue = []
+            self._round_rolls = {}
             self._round_start_bottom_dangos = set()
             return
         self._rng.shuffle(active)
+        move_last = [dango_id for dango_id in active if dango_id in self._last_action_next_round]
+        if move_last:
+            active = [dango_id for dango_id in active if dango_id not in self._last_action_next_round] + move_last
+            self._last_action_next_round.difference_update(move_last)
         self._turn_queue = active
         self._round_number += 1
+        self._round_rolls = {dango_id: self._roll_for(dango_id) for dango_id in active}
         self._round_start_bottom_dangos = {
             dango_id for dango_id in active if self._is_bottom_of_stack(dango_id)
         }
         self._round_step_penalties = {}
+        self._skip_turn_dangos = set()
         self._event_log.append(
             EventRecord(
                 event_type="round_start",
@@ -233,6 +248,11 @@ class RaceSimulator:
             self._stack_active.add(dango_id)
 
     def _roll_for(self, dango_id: str) -> int:
+        if self._has_ability(dango_id, "moning_precision_calculation"):
+            roll_cycle = (3, 2, 1)
+            index = self._fixed_roll_indices.get(dango_id, 0)
+            self._fixed_roll_indices[dango_id] = index + 1
+            return roll_cycle[index % len(roll_cycle)]
         if self._has_ability(dango_id, "shorekeeper_future"):
             return self._rng.choice([2, 3])
         max_roll = 6 if self._dangos[dango_id].is_boss else 3
@@ -243,6 +263,26 @@ class RaceSimulator:
 
     def _apply_before_move_abilities(self, dango_id: str, roll: int) -> _BeforeMoveResult:
         dango = self._dangos[dango_id]
+        if dango_id in self._skip_turn_dangos:
+            ability = self._ability_by_id(dango_id, "augusta_governor_authority")
+            ability_name = ability.name if ability else "總督權柄"
+            self._skip_turn_dangos.remove(dango_id)
+            self._event_log.append(
+                EventRecord(
+                    event_type="ability",
+                    message=f"{dango.name} 發動能力 {ability_name}，本回合不行動。",
+                    data={
+                        "dango_id": dango_id,
+                        "ability_id": "augusta_governor_authority",
+                        "ability_name": ability_name,
+                    },
+                )
+            )
+            return _BeforeMoveResult(
+                steps=roll,
+                reasons=("ability:augusta_governor_authority",),
+                skip_movement=True,
+            )
         effective_roll = roll
         skip_movement = False
         reasons: list[str] = []
@@ -256,7 +296,7 @@ class RaceSimulator:
                 continue
             if self._is_builtin_action(ability):
                 result = self._apply_builtin_before_move(dango_id, ability, effective_roll)
-                if result.steps == effective_roll and not result.skip_movement:
+                if result.steps == effective_roll and not result.skip_movement and not result.triggered:
                     continue
                 effective_roll = result.steps
                 skip_movement = skip_movement or result.skip_movement
@@ -266,8 +306,8 @@ class RaceSimulator:
                 self._event_log.append(
                     EventRecord(
                         event_type="ability",
-                        message=f"{dango.name} 發動能力 {ability.id}。",
-                        data={"dango_id": dango_id, "ability_id": ability.id},
+                        message=f"{dango.name} 發動能力 {ability.name}。",
+                        data={"dango_id": dango_id, "ability_id": ability.id, "ability_name": ability.name},
                     )
                 )
                 continue
@@ -282,8 +322,8 @@ class RaceSimulator:
             self._event_log.append(
                 EventRecord(
                     event_type="ability",
-                    message=f"{dango.name} 發動能力 {ability.id}。",
-                    data={"dango_id": dango_id, "ability_id": ability.id},
+                    message=f"{dango.name} 發動能力 {ability.name}。",
+                    data={"dango_id": dango_id, "ability_id": ability.id, "ability_name": ability.name},
                 )
             )
         penalty = self._round_step_penalties.get(dango_id, 0)
@@ -307,8 +347,12 @@ class RaceSimulator:
             if "kat_late_surge_active" in self._ability_flags[dango_id] and self._rng.random() < ability.probability:
                 return _BuiltinBeforeMoveResult(roll + 2)
             return _BuiltinBeforeMoveResult(roll)
-        if ability.id in {"phoebe_bonus", "chisaki_bonus"}:
+        if ability.id == "phoebe_bonus":
             return _BuiltinBeforeMoveResult(roll + 1 if self._rng.random() < ability.probability else roll)
+        if ability.id == "chisaki_threshold_analysis":
+            round_rolls = self._round_rolls.values()
+            min_roll = min(round_rolls) if round_rolls else roll
+            return _BuiltinBeforeMoveResult(roll + 2 if roll == min_roll else roll)
         if ability.id == "colletta_double_authority":
             return _BuiltinBeforeMoveResult(roll * 2 if self._rng.random() < ability.probability else roll)
         if ability.id == "linne_colorful":
@@ -318,6 +362,13 @@ class RaceSimulator:
             if chance < 0.8:
                 return _BuiltinBeforeMoveResult(roll * 2)
             return _BuiltinBeforeMoveResult(roll)
+        if ability.id == "jinhsi_magistrate_name":
+            if self._has_stacked_above(dango_id) and self._rng.random() < ability.probability:
+                self._move_to_stack_top(dango_id)
+                return _BuiltinBeforeMoveResult(roll, triggered=True)
+            return _BuiltinBeforeMoveResult(roll)
+        if ability.id == "calcharo_shadow_follow":
+            return _BuiltinBeforeMoveResult(roll + 3 if self._is_last_regular(dango_id) else roll)
         return _BuiltinBeforeMoveResult(roll)
 
     def _apply_after_move_abilities(self, dango_id: str, from_position: int) -> None:
@@ -334,7 +385,7 @@ class RaceSimulator:
                     EventRecord(
                         event_type="ability",
                         message=f"{self._dangos[dango_id].name} 進入追趕狀態。",
-                        data={"dango_id": dango_id, "ability_id": ability.id},
+                        data={"dango_id": dango_id, "ability_id": ability.id, "ability_name": ability.name},
                     )
                 )
             elif ability.id == "aemiss_ghost" and self._crossed_midpoint(from_position, self._positions[dango_id]):
@@ -347,7 +398,25 @@ class RaceSimulator:
                     EventRecord(
                         event_type="ability",
                         message=f"{self._dangos[dango_id].name} 傳送到最近團子頂端。",
-                        data={"dango_id": dango_id, "ability_id": ability.id, "target": target},
+                        data={"dango_id": dango_id, "ability_id": ability.id, "ability_name": ability.name, "target": target},
+                    )
+                )
+            elif ability.id == "yuno_anchor_fate" and self._crossed_midpoint(from_position, self._positions[dango_id]):
+                targets = self._adjacent_regular_rank_targets(dango_id)
+                if not targets:
+                    continue
+                self._move_ranked_targets_to_position(targets, self._positions[dango_id])
+                self._used_once_abilities.add(key)
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 發動能力 {ability.name}，錨定前後團子。",
+                        data={
+                            "dango_id": dango_id,
+                            "ability_id": ability.id,
+                            "ability_name": ability.name,
+                            "targets": list(targets),
+                        },
                     )
                 )
 
@@ -430,11 +499,38 @@ class RaceSimulator:
             )
 
     def _apply_round_start_abilities(self) -> None:
+        for dango_id in list(self._positions):
+            if dango_id in self._rankings:
+                continue
+            augusta = self._ability_by_id(dango_id, "augusta_governor_authority")
+            if augusta and self._is_top_of_stack(dango_id):
+                self._skip_turn_dangos.add(dango_id)
+                self._last_action_next_round.add(dango_id)
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 發動能力 {augusta.name}，下回合最後行動。",
+                        data={"dango_id": dango_id, "ability_id": augusta.id, "ability_name": augusta.name},
+                    )
+                )
+
+            changli = self._ability_by_id(dango_id, "changli_strategic_delay")
+            if changli and self._has_stacked_below(dango_id) and self._rng.random() < changli.probability:
+                self._last_action_next_round.add(dango_id)
+                self._event_log.append(
+                    EventRecord(
+                        event_type="ability",
+                        message=f"{self._dangos[dango_id].name} 發動能力 {changli.name}，下回合最後行動。",
+                        data={"dango_id": dango_id, "ability_id": changli.id, "ability_name": changli.name},
+                    )
+                )
+
         if self._round_number <= 1:
             return
         ranked = self._regulars_by_progress()
         for dango_id in list(self._positions):
-            if not self._has_ability(dango_id, "sigurd_sun_help") or dango_id not in ranked:
+            ability = self._ability_by_id(dango_id, "sigurd_sun_help")
+            if ability is None or dango_id not in ranked:
                 continue
             index = ranked.index(dango_id)
             targets = ranked[max(0, index - 2) : index]
@@ -445,7 +541,7 @@ class RaceSimulator:
                     EventRecord(
                         event_type="ability",
                         message=f"{self._dangos[dango_id].name} 標記前方團子：" + "、".join(targets),
-                        data={"dango_id": dango_id, "targets": list(targets), "ability_id": "sigurd_sun_help"},
+                        data={"dango_id": dango_id, "targets": list(targets), "ability_id": ability.id, "ability_name": ability.name},
                     )
                 )
 
@@ -501,6 +597,12 @@ class RaceSimulator:
     def _has_ability(self, dango_id: str, ability_id: str) -> bool:
         return any(ability.id == ability_id for ability in self._dangos[dango_id].abilities)
 
+    def _ability_by_id(self, dango_id: str, ability_id: str) -> AbilityConfig | None:
+        for ability in self._dangos[dango_id].abilities:
+            if ability.id == ability_id:
+                return ability
+        return None
+
     def _is_builtin_action(self, ability) -> bool:
         return any(action.type == "builtin" for action in ability.actions)
 
@@ -508,6 +610,21 @@ class RaceSimulator:
         position = self._positions[dango_id]
         stack = self._stacks[position]
         return len(stack) >= 2 and stack[0] == dango_id
+
+    def _is_top_of_stack(self, dango_id: str) -> bool:
+        position = self._positions[dango_id]
+        stack = self._stacks[position]
+        return len(stack) >= 2 and stack[-1] == dango_id
+
+    def _has_stacked_below(self, dango_id: str) -> bool:
+        position = self._positions[dango_id]
+        stack = self._stacks[position]
+        return len(stack) >= 2 and stack.index(dango_id) > 0
+
+    def _has_stacked_above(self, dango_id: str) -> bool:
+        position = self._positions[dango_id]
+        stack = self._stacks[position]
+        return len(stack) >= 2 and stack.index(dango_id) < len(stack) - 1
 
     def _is_last_regular(self, dango_id: str) -> bool:
         if self._dangos[dango_id].is_boss or dango_id in self._rankings:
@@ -537,3 +654,29 @@ class RaceSimulator:
         old_position = self._positions[dango_id]
         self._stacks[old_position].remove(dango_id)
         self._place_group(position, [dango_id])
+
+    def _move_to_stack_top(self, dango_id: str) -> None:
+        position = self._positions[dango_id]
+        stack = self._stacks[position]
+        stack.remove(dango_id)
+        stack.append(dango_id)
+
+    def _adjacent_regular_rank_targets(self, dango_id: str) -> tuple[str, ...]:
+        ranked = self._regulars_by_progress()
+        if dango_id not in ranked:
+            return ()
+        index = ranked.index(dango_id)
+        targets: list[str] = []
+        if index > 0:
+            targets.append(ranked[index - 1])
+        if index + 1 < len(ranked):
+            targets.append(ranked[index + 1])
+        return tuple(targets)
+
+    def _move_ranked_targets_to_position(self, targets: tuple[str, ...], position: int) -> None:
+        for target in targets:
+            old_position = self._positions[target]
+            self._stacks[old_position].remove(target)
+        # `_place_group` appends regulars bottom-to-top, so reverse the ranked
+        # order to keep the highest-ranked teleported dango visually on top.
+        self._place_group(position, reversed(targets))
