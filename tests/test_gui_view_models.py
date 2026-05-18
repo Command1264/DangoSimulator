@@ -183,6 +183,7 @@ def test_participant_card_layout_spec_matches_user_facing_dialog_requirements() 
     assert spec.order_controls_side_by_side is True
     assert spec.group_badge_position == "top_left"
     assert spec.identity_layout == "avatar_over_name_centered"
+    assert spec.controls_ignore_wheel is True
 
 
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:

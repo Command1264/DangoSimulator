@@ -29,6 +29,7 @@ class ParticipantCardLayoutSpec:
     order_controls_side_by_side: bool = True
     group_badge_position: str = "top_left"
     identity_layout: str = "avatar_over_name_centered"
+    controls_ignore_wheel: bool = True
 
 
 @dataclass(frozen=True)

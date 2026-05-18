@@ -313,6 +313,14 @@ def run() -> int:
                 label.setPos(x - 12, y - 26 + offset_y)
                 self.addItem(label)
 
+    class WheelTransparentSpinBox(QSpinBox):
+        def wheelEvent(self, event) -> None:  # noqa: N802 - Qt override name
+            event.ignore()
+
+    class WheelTransparentComboBox(QComboBox):
+        def wheelEvent(self, event) -> None:  # noqa: N802 - Qt override name
+            event.ignore()
+
     class ParticipantCard(QFrame):
         def __init__(
             self,
@@ -366,7 +374,7 @@ def run() -> int:
             note.setAlignment(Qt.AlignmentFlag.AlignCenter)
             note.setWordWrap(True)
             layout.addWidget(note)
-            self.position = QSpinBox()
+            self.position = WheelTransparentSpinBox()
             self.position.setRange(1, self.track_length)
             self.position.setValue(min(max(1, state.start_position), self.track_length))
             self.stack_order = self._order_combo(state.initial_stack_order)
@@ -383,7 +391,7 @@ def run() -> int:
             order_row.addLayout(stack_column, 1)
             order_row.addLayout(first_round_column, 1)
             layout.addLayout(order_row)
-            self.mode = QComboBox()
+            self.mode = WheelTransparentComboBox()
             self.mode.addItem("干擾者", BossMode.DISRUPTOR.value)
             self.mode.addItem("參賽者", BossMode.RANKED.value)
             self.mode.setVisible(state.is_boss)
@@ -396,7 +404,7 @@ def run() -> int:
             self._refresh_card_state()
 
         def _order_combo(self, value: int | None) -> QComboBox:
-            combo = QComboBox()
+            combo = WheelTransparentComboBox()
             combo.addItem("隨機", None)
             for order in range(1, self.order_limit + 1):
                 combo.addItem(str(order), order)
@@ -478,7 +486,7 @@ def run() -> int:
             title.addWidget(self.count_label)
             header.addLayout(title, 1)
             header.addWidget(QLabel("地圖"))
-            self.map_selector = QComboBox()
+            self.map_selector = WheelTransparentComboBox()
             self.map_selector.addItem("預設賽道")
             self.map_selector.setEnabled(False)
             header.addWidget(self.map_selector)
