@@ -348,6 +348,36 @@ def test_floro_bottom_bonus_requires_an_actual_stack() -> None:
     assert result.to_position == 1 + result.roll
 
 
+def test_sigurd_mark_event_log_uses_target_names_not_ids() -> None:
+    payload = {
+        "track": {"length": 50, "finish": 50, "devices": []},
+        "dangos": [
+            {"id": "front_a", "name": "前方甲團子", "start_position": 10},
+            {"id": "front_b", "name": "前方乙團子", "start_position": 9},
+            {
+                "id": "sigurd",
+                "name": "西格莉卡團子",
+                "start_position": 1,
+                "abilities": [
+                    {"id": "sigurd_sun_help", "name": "太陽援助", "trigger": "round_start", "actions": [{"type": "builtin"}]}
+                ],
+            },
+            {"id": "behind", "name": "後方團子", "start_position": 1},
+        ],
+        "seed": 4,
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    for _ in range(5):
+        simulator.step_next()
+
+    message = next(event.message for event in simulator.snapshot().event_log if "標記前方團子" in event.message)
+    assert "前方甲團子" in message
+    assert "後方團子" in message
+    assert "front_a" not in message
+    assert "behind" not in message
+
+
 def test_chisaki_gains_bonus_when_roll_is_round_minimum() -> None:
     payload = {
         "track": {"length": 20, "finish": 20, "devices": []},

@@ -8,6 +8,14 @@ from dangosim.core.boss_rules import should_boss_return_to_finish
 from dangosim.core.models import AbilityConfig, DeviceType, EventRecord, MoveResult, RaceConfig, RaceSnapshot
 
 
+_DEVICE_DISPLAY_NAMES = {
+    DeviceType.BLANK: "空白",
+    DeviceType.ADVANCE: "推進裝置",
+    DeviceType.BLOCK: "阻遏裝置",
+    DeviceType.TIME_RIFT: "時空裂隙",
+}
+
+
 @dataclass(frozen=True)
 class _BuiltinBeforeMoveResult:
     steps: int
@@ -91,7 +99,7 @@ class RaceSimulator:
             self._event_log.append(
                 EventRecord(
                     event_type="device",
-                    message=f"{dango.name} 觸發 {device.value}",
+                    message=f"{dango.name} 觸發 {self._device_display_name(device)}",
                     data={"dango_id": dango_id, "position": base_position, "device": device.value},
                 )
             )
@@ -189,7 +197,7 @@ class RaceSimulator:
         self._event_log.append(
             EventRecord(
                 event_type="round_start",
-                message=f"第 {self._round_number} 回合行動順序：" + "、".join(active),
+                message=f"第 {self._round_number} 回合行動順序：" + "、".join(self._dango_names(active)),
                 data={"round": self._round_number, "order": list(active)},
             )
         )
@@ -550,7 +558,7 @@ class RaceSimulator:
                 self._event_log.append(
                     EventRecord(
                         event_type="ability",
-                        message=f"{self._dangos[dango_id].name} 標記前方團子：" + "、".join(targets),
+                        message=f"{self._dangos[dango_id].name} 標記前方團子：" + "、".join(self._dango_names(targets)),
                         data={"dango_id": dango_id, "targets": list(targets), "ability_id": ability.id, "ability_name": ability.name},
                     )
                 )
@@ -690,3 +698,9 @@ class RaceSimulator:
         # `_place_group` appends regulars bottom-to-top, so reverse the ranked
         # order to keep the highest-ranked teleported dango visually on top.
         self._place_group(position, reversed(targets))
+
+    def _dango_names(self, dango_ids: Iterable[str]) -> list[str]:
+        return [self._dangos[dango_id].name for dango_id in dango_ids]
+
+    def _device_display_name(self, device: DeviceType) -> str:
+        return _DEVICE_DISPLAY_NAMES.get(device, device.value)

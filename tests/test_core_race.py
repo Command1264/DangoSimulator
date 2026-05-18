@@ -31,6 +31,27 @@ def test_step_next_uses_one_randomized_action_order_per_round() -> None:
     assert actors == ["b", "c", "a"]
 
 
+def test_round_start_event_log_uses_dango_names_not_ids() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=20, finish=20),
+            dangos=[
+                DangoConfig(id="lu", name="陸赫斯團子", start_position=1),
+                DangoConfig(id="fei", name="菲比團子", start_position=2),
+            ],
+            seed=1,
+        )
+    )
+
+    simulator.step_next()
+
+    message = simulator.snapshot().event_log[0].message
+    assert "陸赫斯團子" in message
+    assert "菲比團子" in message
+    assert "lu" not in message
+    assert "fei" not in message
+
+
 def test_initial_stack_order_is_randomized_with_seed() -> None:
     config = RaceConfig(
         track=TrackConfig(length=8, finish=8),
@@ -91,6 +112,21 @@ def test_advance_and_block_devices_trigger_only_on_landing_cell() -> None:
     assert first.device_triggered == DeviceType.ADVANCE
     assert second.to_position == 4
     assert second.device_triggered == DeviceType.BLOCK
+
+
+def test_device_event_log_uses_device_names_not_values() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=8, finish=8, devices={3: DeviceType.ADVANCE, 6: DeviceType.BLOCK}),
+            dangos=[DangoConfig(id="lu", name="陸赫斯團子", start_position=1)],
+        )
+    )
+
+    simulator.step_dango("lu", 2)
+    simulator.step_dango("lu", 2)
+
+    messages = [event.message for event in simulator.snapshot().event_log if event.event_type == "device"]
+    assert messages == ["陸赫斯團子 觸發 推進裝置", "陸赫斯團子 觸發 阻遏裝置"]
 
 
 def test_time_rift_reorders_stack_with_seeded_randomness() -> None:

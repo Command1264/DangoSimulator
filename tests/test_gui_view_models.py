@@ -72,9 +72,9 @@ def test_avatar_label_uses_first_visible_name_character() -> None:
 
 
 def test_format_event_log_message_only_indents_detail_events() -> None:
-    assert format_event_log_message("第 1 回合行動順序：lu、fei") == "第 1 回合行動順序：lu、fei"
+    assert format_event_log_message("第 1 回合行動順序：陸赫斯團子、菲比團子") == "第 1 回合行動順序：陸赫斯團子、菲比團子"
     assert format_event_log_message("比賽結束，菲比團子 取得第 1 名。") == "比賽結束，菲比團子 取得第 1 名。"
-    assert format_event_log_message("菲比團子 觸發 advance") == "　　菲比團子 觸發 advance"
+    assert format_event_log_message("菲比團子 觸發 推進裝置") == "　　菲比團子 觸發 推進裝置"
 
 
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:
