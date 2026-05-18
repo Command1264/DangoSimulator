@@ -22,6 +22,16 @@ class BossMode(str, Enum):
 
 
 @dataclass(frozen=True)
+class ParticipantCardLayoutSpec:
+    columns: int = 4
+    allow_horizontal_scroll: bool = False
+    show_selection_checkbox: bool = False
+    order_controls_side_by_side: bool = True
+    group_badge_position: str = "top_left"
+    identity_layout: str = "avatar_over_name_centered"
+
+
+@dataclass(frozen=True)
 class ParticipantCardState:
     dango_id: str
     name: str
@@ -124,6 +134,10 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
             ).normalized()
         )
     return cards
+
+
+def participant_card_layout_spec() -> ParticipantCardLayoutSpec:
+    return ParticipantCardLayoutSpec()
 
 
 def avatar_label_for_name(name: str) -> str:

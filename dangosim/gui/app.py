@@ -45,6 +45,7 @@ from dangosim.gui.view_models import (
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
+    participant_card_layout_spec,
     participant_selection_summary,
     track_cell_tooltip,
 )
@@ -328,27 +329,41 @@ def run() -> int:
             self.order_limit = max(1, order_limit)
             self.setFrameShape(QFrame.Shape.StyledPanel)
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setMinimumWidth(190)
             layout = QVBoxLayout(self)
-            header = QHBoxLayout()
-            self.checkbox = QCheckBox()
-            self.checkbox.setChecked(state.selected)
-            self.checkbox.setEnabled(not state.is_boss)
-            header.addWidget(self.checkbox, 0)
-            avatar = QLabel(avatar_label_for_name(state.name))
-            avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            avatar.setFixedSize(42, 42)
-            avatar.setStyleSheet("border-radius: 21px; background: #d9effa; font-weight: 700;")
-            header.addWidget(avatar, 0)
-            name = QLabel(state.name)
-            name.setWordWrap(True)
-            name.setStyleSheet("font-weight: 700;")
-            header.addWidget(name, 1)
+            layout.setSpacing(8)
+            badge_row = QHBoxLayout()
             if state.group:
                 group = QLabel(state.group)
-                group.setStyleSheet("border-radius: 10px; padding: 2px 7px; background: #e4f4fb; color: #3d6980;")
-                header.addWidget(group, 0)
-            layout.addLayout(header)
+                group.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                group.setMinimumWidth(24)
+                group.setFixedHeight(24)
+                group.setStyleSheet(
+                    "border-radius: 12px;"
+                    "padding: 2px 7px;"
+                    "background: #d9effa;"
+                    "color: #3d6980;"
+                    "font-weight: 700;"
+                )
+                badge_row.addWidget(group, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            badge_row.addStretch(1)
+            layout.addLayout(badge_row)
+
+            identity = QVBoxLayout()
+            identity.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            avatar = QLabel(avatar_label_for_name(state.name))
+            avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            avatar.setFixedSize(52, 52)
+            avatar.setStyleSheet("border-radius: 26px; background: #d9effa; font-size: 20px; font-weight: 700;")
+            identity.addWidget(avatar, 0, Qt.AlignmentFlag.AlignCenter)
+            name = QLabel(state.name)
+            name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            name.setWordWrap(True)
+            name.setStyleSheet("font-weight: 700;")
+            identity.addWidget(name, 0, Qt.AlignmentFlag.AlignCenter)
+            layout.addLayout(identity)
             note = QLabel(state.skill_note)
+            note.setAlignment(Qt.AlignmentFlag.AlignCenter)
             note.setWordWrap(True)
             layout.addWidget(note)
             self.position = QSpinBox()
@@ -358,17 +373,22 @@ def run() -> int:
             self.first_round_order = self._order_combo(state.first_round_order)
             layout.addWidget(QLabel("初始位置"))
             layout.addWidget(self.position)
-            layout.addWidget(QLabel("初始堆疊"))
-            layout.addWidget(self.stack_order)
-            layout.addWidget(QLabel("首回合順序"))
-            layout.addWidget(self.first_round_order)
+            order_row = QHBoxLayout()
+            stack_column = QVBoxLayout()
+            stack_column.addWidget(QLabel("初始堆疊"))
+            stack_column.addWidget(self.stack_order)
+            first_round_column = QVBoxLayout()
+            first_round_column.addWidget(QLabel("首回合順序"))
+            first_round_column.addWidget(self.first_round_order)
+            order_row.addLayout(stack_column, 1)
+            order_row.addLayout(first_round_column, 1)
+            layout.addLayout(order_row)
             self.mode = QComboBox()
             self.mode.addItem("干擾者", BossMode.DISRUPTOR.value)
             self.mode.addItem("參賽者", BossMode.RANKED.value)
             self.mode.setVisible(state.is_boss)
             self.mode.setCurrentIndex(1 if state.boss_mode is BossMode.RANKED else 0)
             layout.addWidget(self.mode)
-            self.checkbox.stateChanged.connect(self._changed)
             self.position.valueChanged.connect(self._changed)
             self.stack_order.currentIndexChanged.connect(self._changed)
             self.first_round_order.currentIndexChanged.connect(self._changed)
@@ -388,16 +408,19 @@ def run() -> int:
 
         def mousePressEvent(self, event) -> None:
             child = self.childAt(event.position().toPoint())
-            if any(
+            clicked_edit_control = any(
                 self._is_child_widget(child, widget)
-                for widget in [self.checkbox, self.position, self.stack_order, self.first_round_order, self.mode]
-            ):
+                for widget in [self.position, self.stack_order, self.first_round_order, self.mode]
+            )
+            if clicked_edit_control and self.state.selected:
                 super().mousePressEvent(event)
                 return
             if self.state.is_boss:
                 event.accept()
                 return
-            self.checkbox.setChecked(not self.checkbox.isChecked())
+            self.state = self.state.with_updates(selected=not self.state.selected)
+            self._refresh_card_state()
+            self.on_change()
             event.accept()
 
         def _is_child_widget(self, child, widget) -> bool:
@@ -410,7 +433,7 @@ def run() -> int:
         def _changed(self) -> None:
             mode = BossMode(self.mode.currentData()) if self.state.is_boss else BossMode.NONE
             self.state = self.state.with_updates(
-                selected=self.checkbox.isChecked(),
+                selected=self.state.selected,
                 boss_mode=mode,
                 start_position=self.position.value(),
             ).with_order_updates(
@@ -424,10 +447,6 @@ def run() -> int:
             self.setEnabled(enabled)
 
         def _refresh_card_state(self) -> None:
-            if self.checkbox.isChecked() != self.state.selected:
-                self.checkbox.blockSignals(True)
-                self.checkbox.setChecked(self.state.selected)
-                self.checkbox.blockSignals(False)
             controls_enabled = self.state.selected
             for widget in [self.position, self.stack_order, self.first_round_order, self.mode]:
                 widget.setEnabled(controls_enabled)
@@ -445,8 +464,9 @@ def run() -> int:
     class ParticipantSetupDialog(QDialog):
         def __init__(self, cards: list[ParticipantCardState], *, track_length: int, parent: QWidget | None = None) -> None:
             super().__init__(parent)
+            layout_spec = participant_card_layout_spec()
             self.setWindowTitle("自訂參賽團子")
-            self.resize(760, 680)
+            self.resize(940, 720)
             self.card_widgets: list[ParticipantCard] = []
             layout = QVBoxLayout(self)
             header = QHBoxLayout()
@@ -466,9 +486,10 @@ def run() -> int:
 
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
+            if not layout_spec.allow_horizontal_scroll:
+                scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             body = QWidget()
             grid = QGridLayout(body)
-            columns = 4
             for index, card in enumerate(cards):
                 widget = ParticipantCard(
                     card,
@@ -477,7 +498,7 @@ def run() -> int:
                     order_limit=len(cards),
                 )
                 self.card_widgets.append(widget)
-                grid.addWidget(widget, index // columns, index % columns)
+                grid.addWidget(widget, index // layout_spec.columns, index % layout_spec.columns)
             scroll.setWidget(body)
             layout.addWidget(scroll, 1)
 

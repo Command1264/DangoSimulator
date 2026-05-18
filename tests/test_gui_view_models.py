@@ -14,6 +14,7 @@ from dangosim.gui.view_models import (
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
+    participant_card_layout_spec,
     participant_selection_summary,
     rank_simulation_rows,
     track_cell_tooltip,
@@ -171,6 +172,17 @@ def test_participant_selection_summary_has_no_upper_limit_text() -> None:
 
     assert participant_selection_summary(cards).startswith("已選 7 顆")
     assert "/6" not in participant_selection_summary(cards)
+
+
+def test_participant_card_layout_spec_matches_user_facing_dialog_requirements() -> None:
+    spec = participant_card_layout_spec()
+
+    assert spec.columns == 4
+    assert spec.allow_horizontal_scroll is False
+    assert spec.show_selection_checkbox is False
+    assert spec.order_controls_side_by_side is True
+    assert spec.group_badge_position == "top_left"
+    assert spec.identity_layout == "avatar_over_name_centered"
 
 
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:
