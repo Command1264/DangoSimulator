@@ -869,9 +869,20 @@ def run() -> int:
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
             self.render_ranking_table(state)
             self.render_round_action_table(state)
+            event_scroll_bar = self.events.verticalScrollBar()
+            auto_scroll_events = self.should_auto_scroll_events()
+            previous_event_scroll_value = event_scroll_bar.value()
             self.events.clear()
             for message in state.event_log[-80:]:
                 self.events.addItem(format_event_log_message(message))
+            if auto_scroll_events:
+                self.events.scrollToBottom()
+            else:
+                event_scroll_bar.setValue(min(previous_event_scroll_value, event_scroll_bar.maximum()))
+
+        def should_auto_scroll_events(self) -> bool:
+            scroll_bar = self.events.verticalScrollBar()
+            return scroll_bar.maximum() <= 0 or scroll_bar.value() >= scroll_bar.maximum()
 
         def render_ranking_table(self, state: RaceViewState) -> None:
             status = "完賽" if state.finished else "賽中"
@@ -1254,7 +1265,47 @@ def run() -> int:
     window = MainWindow()
     window.resize(1480, 840)
     window.show()
-    if os.environ.get("DANGOSIM_GUI_LAYOUT_PROBE") == "1":
+    if os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
+        base_state = window.controller.view_state()
+
+        def state_with_events(prefix: str) -> RaceViewState:
+            return replace(
+                base_state,
+                event_log=tuple(f"{prefix} {index}" for index in range(120)),
+            )
+
+        def scroll_snapshot() -> tuple[int, int]:
+            scroll_bar = window.events.verticalScrollBar()
+            return scroll_bar.value(), scroll_bar.maximum()
+
+        app.processEvents()
+        window.events.clear()
+        app.processEvents()
+        window.render_state(state_with_events("first"))
+        app.processEvents()
+        first_value, first_maximum = scroll_snapshot()
+
+        window.events.scrollToBottom()
+        app.processEvents()
+        window.render_state(state_with_events("second"))
+        app.processEvents()
+        second_value, second_maximum = scroll_snapshot()
+
+        review_target = max(1, second_maximum // 2)
+        window.events.verticalScrollBar().setValue(review_target)
+        app.processEvents()
+        window.render_state(state_with_events("third"))
+        app.processEvents()
+        review_value, review_maximum = scroll_snapshot()
+
+        probe = {
+            "no_scroll_auto_bottom": first_maximum > 0 and first_value == first_maximum,
+            "bottom_auto_bottom": second_maximum > 0 and second_value == second_maximum,
+            "review_position_preserved": review_value == min(review_target, review_maximum),
+        }
+        print(json.dumps(probe, ensure_ascii=False))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_LAYOUT_PROBE") == "1":
         window.start_race()
         window.step_race()
         window.render_results(
