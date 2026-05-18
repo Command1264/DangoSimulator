@@ -5,6 +5,7 @@ import json
 import pytest
 
 from dangosim.core.config_loader import ConfigValidationError, load_race_config
+from dangosim.core.models import AbilityAction, AbilityConfig, DangoConfig, RaceConfig, TrackConfig
 from dangosim.core.simulator import RaceSimulator
 
 
@@ -359,7 +360,7 @@ def test_sigurd_mark_event_log_uses_target_names_not_ids() -> None:
                 "name": "西格莉卡團子",
                 "start_position": 1,
                 "abilities": [
-                    {"id": "sigurd_sun_help", "name": "太陽援助", "trigger": "round_start", "actions": [{"type": "builtin"}]}
+                    {"id": "sigurd_sun_help", "name": "太陽援助", "trigger": "after_roll", "actions": [{"type": "builtin"}]}
                 ],
             },
             {"id": "behind", "name": "後方團子", "start_position": 1},
@@ -373,9 +374,91 @@ def test_sigurd_mark_event_log_uses_target_names_not_ids() -> None:
 
     message = next(event.message for event in simulator.snapshot().event_log if "標記前方團子" in event.message)
     assert "前方甲團子" in message
-    assert "後方團子" in message
+    assert "前方乙團子" in message
     assert "front_a" not in message
-    assert "behind" not in message
+    assert "front_b" not in message
+
+
+def test_after_roll_sigurd_penalty_applies_before_first_actor_moves_each_round() -> None:
+    config = RaceConfig(
+        track=TrackConfig(length=50, finish=50),
+        dangos=[
+            DangoConfig(id="front", name="前方團子", start_position=12),
+            DangoConfig(
+                id="sigurd",
+                name="西格莉卡團子",
+                start_position=4,
+                abilities=(
+                    AbilityConfig(
+                        id="sigurd_sun_help",
+                        name="日靈，幫幫忙!",
+                        trigger="after_roll",
+                        actions=(AbilityAction(type="builtin"),),
+                    ),
+                ),
+            ),
+            DangoConfig(id="behind", name="後方團子", start_position=1),
+        ],
+        seed=0,
+        first_round_order={"front": 1, "sigurd": 2, "behind": 3},
+    )
+    simulator = RaceSimulator(config)
+
+    first = simulator.step_next()
+    first_round_marks = [event for event in simulator.snapshot().event_log if "標記前方團子" in event.message]
+    while simulator.snapshot().round_number == 1:
+        simulator.step_next()
+    simulator.step_next()
+    all_marks = [event for event in simulator.snapshot().event_log if "標記前方團子" in event.message]
+
+    assert first.dango_id == "front"
+    assert "round_penalty" in first.reasons
+    assert first.to_position == first.from_position + max(1, first.roll - 1)
+    assert len(first_round_marks) == 1
+    assert len(all_marks) == 2
+
+
+def test_round_start_ability_triggers_before_action_order_is_announced() -> None:
+    payload = {
+        "track": {"length": 30, "finish": 30, "devices": []},
+        "dangos": [
+            {"id": "bottom", "name": "Bottom", "start_position": 1},
+            {
+                "id": "augusta",
+                "name": "奧古斯塔",
+                "start_position": 1,
+                "abilities": [{"id": "augusta_governor_authority", "name": "總督權柄", "trigger": "round_start", "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "other", "name": "Other", "start_position": 2},
+        ],
+        "seed": 0,
+    }
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+
+    simulator.step_next()
+    events = simulator.snapshot().event_log
+    ability_index = next(index for index, event in enumerate(events) if event.data.get("ability_id") == "augusta_governor_authority")
+    order_index = next(index for index, event in enumerate(events) if event.event_type == "round_start")
+
+    assert ability_index < order_index
+
+
+def test_load_race_config_accepts_after_roll_ability_trigger() -> None:
+    payload = {
+        "track": {"length": 8, "finish": 8, "devices": []},
+        "dangos": [
+            {
+                "id": "sigurd",
+                "name": "西格莉卡團子",
+                "start_position": 1,
+                "abilities": [{"id": "sigurd_sun_help", "name": "日靈，幫幫忙!", "trigger": "after_roll", "actions": [{"type": "builtin"}]}],
+            }
+        ],
+    }
+
+    config = load_race_config(json.dumps(payload))
+
+    assert config.dangos[0].abilities[0].trigger == "after_roll"
 
 
 def test_chisaki_gains_bonus_when_roll_is_round_minimum() -> None:

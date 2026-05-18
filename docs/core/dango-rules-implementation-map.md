@@ -17,6 +17,7 @@
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
 | 骰子隨機決定行動順序 | `RaceSimulator._start_round()` | 已實作，每輪洗牌一次 |
+| 每輪流程為回合開始觸發、決定行動順序、全員擲骰、擲骰後觸發、依序移動 | `RaceSimulator._start_round()` / `_apply_round_start_abilities()` / `_apply_after_roll_abilities()` / `step_next()` | 已實作 |
 | 初始同格團子上下堆疊順序隨機 | `RaceSimulator.__init__()` / `_shuffle_stack_preserving_boss_bottom()` | 已實作；固定 seed 可重現，布大王仍維持底部 |
 | 骰子決定前進步數 | `RaceSimulator._roll_for()` / `step_dango()` | 已實作 |
 | 一般團子骰 1-3 | `RaceSimulator._roll_for()` | 已實作 |
@@ -30,7 +31,7 @@
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
 | 團子每輪行動時有機率發動技能 | `AbilityConfig.probability` / builtin ability handlers | 已實作 |
-| 技能影響行動方式 | `before_move` / `after_move` / `round_start` / `on_device` triggers | 已實作 |
+| 技能影響行動方式 | `before_move` / `after_move` / `after_roll` / `round_start` / `on_device` triggers | 已實作 |
 | 賽道存在阻礙或幫助前進的機關 | `DeviceType` / `RaceSimulator._apply_device()` | 已實作 |
 
 ## 賽道裝置
@@ -60,7 +61,7 @@
 | 團子 | Ability id | 對應元件 | 狀態 |
 | --- | --- | --- | --- |
 | 陸赫斯 | `lu_device_master` | `_device_ability_delta()` | 已實作 |
-| 西格莉卡 | `sigurd_sun_help` | `_apply_round_start_abilities()` | 已實作 |
+| 西格莉卡 | `sigurd_sun_help` | `_apply_after_roll_abilities()` | 已實作；全員擲骰後、第一顆團子移動前標記前方至多兩顆團子 |
 | 達妮亞 | `daphne_same_roll_bonus` | `_apply_builtin_before_move()` | 已實作 |
 | 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |
 | 卡提希婭 | `kat_activate_late_surge`, `kat_late_surge_bonus` | `_apply_after_move_abilities()` / `_apply_builtin_before_move()` | 已實作 |

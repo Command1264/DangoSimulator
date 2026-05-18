@@ -181,21 +181,22 @@ class RaceSimulator:
             self._round_rolls = {}
             self._round_start_bottom_dangos = set()
             return
-        self._rng.shuffle(active)
-        if next_round == 1:
-            active = self._apply_order_override(active, self.config.first_round_order)
-        move_last = [dango_id for dango_id in active if dango_id in self._last_action_next_round]
-        if move_last:
-            active = [dango_id for dango_id in active if dango_id not in self._last_action_next_round] + move_last
-            self._last_action_next_round.difference_update(move_last)
-        self._turn_queue = active
+        pending_move_last = set(self._last_action_next_round)
+        self._last_action_next_round.difference_update(pending_move_last)
         self._round_number += 1
-        self._round_rolls = {dango_id: self._roll_for(dango_id) for dango_id in active}
         self._round_start_bottom_dangos = {
             dango_id for dango_id in active if self._is_bottom_of_stack(dango_id)
         }
         self._round_step_penalties = {}
         self._skip_turn_dangos = set()
+        self._apply_round_start_abilities()
+        self._rng.shuffle(active)
+        if next_round == 1:
+            active = self._apply_order_override(active, self.config.first_round_order)
+        move_last = [dango_id for dango_id in active if dango_id in pending_move_last]
+        if move_last:
+            active = [dango_id for dango_id in active if dango_id not in pending_move_last] + move_last
+        self._turn_queue = active
         self._event_log.append(
             EventRecord(
                 event_type="round_start",
@@ -203,7 +204,8 @@ class RaceSimulator:
                 data={"round": self._round_number, "order": list(active)},
             )
         )
-        self._apply_round_start_abilities()
+        self._round_rolls = {dango_id: self._roll_for(dango_id) for dango_id in active}
+        self._apply_after_roll_abilities(active)
 
     def _can_act_in_round(self, dango_id: str, round_number: int) -> bool:
         dango = self._dangos[dango_id]
@@ -554,12 +556,14 @@ class RaceSimulator:
                     )
                 )
 
-        if self._round_number <= 1:
-            return
+    def _apply_after_roll_abilities(self, active: Iterable[str]) -> None:
+        active_ids = set(active)
         ranked = self._regulars_by_progress()
         for dango_id in list(self._positions):
+            if dango_id not in active_ids:
+                continue
             ability = self._ability_by_id(dango_id, "sigurd_sun_help")
-            if ability is None or dango_id not in ranked:
+            if ability is None or ability.trigger != "after_roll" or dango_id not in ranked:
                 continue
             index = ranked.index(dango_id)
             targets = ranked[max(0, index - 2) : index]

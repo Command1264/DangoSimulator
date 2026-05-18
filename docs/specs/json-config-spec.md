@@ -28,6 +28,7 @@
 
 - `before_move`
 - `after_move`
+- `after_roll`
 - `round_start`
 - `on_device`
 

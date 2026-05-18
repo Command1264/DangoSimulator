@@ -43,7 +43,7 @@
         {
           "id": "sigurd_sun_help",
           "name": "日靈，幫幫忙!",
-          "trigger": "round_start",
+          "trigger": "after_roll",
           "actions": [{ "type": "builtin" }]
         }
       ],
