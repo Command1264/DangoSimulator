@@ -133,9 +133,11 @@ message box 需顯示樣本場數、正式 worker 數、預估時間與是否開
 Seed 模式：
 
 - 固定 seed：使用者輸入 0 到 2^64-1 的整數 seed，結果可重現。
-- 系統隨機 seed：使用 Python `secrets.randbits(64)` 取得作業系統安全隨機來源，並在 GUI 顯示與回填實際使用 seed，方便切回固定 seed 重跑。
+- 系統隨機 seed：使用 Python `secrets.randbits(64)` 取得作業系統安全隨機來源，並在 GUI 的目前 seed 顯示區顯示實際使用 seed。
 
+Seed 輸入欄位旁需顯示 `固定 Seed：` label。
 Seed 輸入欄位只在固定 seed 模式可編輯；選擇系統隨機 seed 時必須禁用，直到切回固定 seed。
+系統隨機 seed 模式不得把實際使用 seed 回填到固定 seed 輸入欄位，固定 seed 輸入欄位需保留使用者原本輸入的值。
 
 Python 標準函式庫不保證可指定「CPU 熱噪聲」作為來源；系統隨機 seed 是此專案可攜且務實的隨機來源。
 

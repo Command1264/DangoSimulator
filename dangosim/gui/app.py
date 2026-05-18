@@ -753,6 +753,8 @@ def run() -> int:
             controls.addWidget(self.run_count)
             controls.addWidget(QLabel("Seed"))
             controls.addWidget(self.seed_mode)
+            self.fixed_seed_label = QLabel("固定 Seed：")
+            controls.addWidget(self.fixed_seed_label)
             controls.addWidget(self.seed_input)
             controls.addWidget(QLabel("CPU worker"))
             controls.addWidget(self.worker_count)
@@ -847,7 +849,8 @@ def run() -> int:
                 config_seed=self.active_config.seed,
             )
             self.current_seed = resolved_seed.seed
-            self.seed_input.setText(str(self.current_seed))
+            if resolved_seed.mode is SeedMode.FIXED:
+                self.seed_input.setText(str(self.current_seed))
             self.active_config = replace(self.active_config, seed=self.current_seed)
             self.controller = GuiRaceController(self.active_config)
 
@@ -1056,7 +1059,8 @@ def run() -> int:
             self.batch_running = False
             rows = result.rows
             self.current_seed = result.seed
-            self.seed_input.setText(str(result.seed))
+            if result.seed_mode is SeedMode.FIXED:
+                self.seed_input.setText(str(result.seed))
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
             self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
             mode = self.sort_mode.currentText()
@@ -1289,7 +1293,38 @@ def run() -> int:
     window = MainWindow()
     window.showMaximized()
     app.processEvents()
-    if os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
+    if os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
+        window.configure_race_from_controls()
+        fixed_seed_after_single_race_config = window.seed_input.text()
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="probe",
+                        name="測試團子",
+                        wins=12,
+                        win_rate=0.12,
+                        average_rank=2.34,
+                        weighted_score=0.5678,
+                    )
+                ],
+                seed_mode=SeedMode.SYSTEM,
+                seed=987654,
+                completed_runs=100,
+                total_runs=100,
+                cancelled=False,
+            )
+        )
+        probe = {
+            "fixed_seed_label": window.fixed_seed_label.text(),
+            "fixed_seed_after_single_race_config": fixed_seed_after_single_race_config,
+            "fixed_seed_after_system_batch_result": window.seed_input.text(),
+            "current_seed_after_system_batch_result": window.current_seed,
+            "seed_label_after_system_batch_result": window.seed_label.text(),
+        }
+        print(json.dumps(probe, ensure_ascii=False))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
         base_state = window.controller.view_state()
 
         def state_with_events(prefix: str) -> RaceViewState:
