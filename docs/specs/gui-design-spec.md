@@ -6,7 +6,9 @@
 
 ## MVP 畫面
 
-- 標題：`DangoSimulator 小團快跑模擬器`
+- 視窗預設最大化啟動
+- 主畫面使用上下方向 splitter，讓單場模擬 group 與多輪模擬 group 高度可拖曳調整
+- 標題 `DangoSimulator 小團快跑模擬器` 顯示在中央賽道區上方置中，視窗標題列保留同名 title
 - 載入內建 `data/default_race.json`
 - 顯示參賽團子數量與可勾選團子卡片
 - 控制：開始、下一步、自動播放 checkbox、暫停、重置

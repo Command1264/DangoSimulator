@@ -105,6 +105,10 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
 
     assert result.returncode == 0, result.stderr
     probe = json.loads(result.stdout)
+    assert probe["window_maximized"] is True
+    assert probe["root_splitter_orientation"] == "vertical"
+    assert probe["root_splitter_widgets"] == ["single_race_group", "batch_simulation_group"]
+    assert probe["title_parent"] == "center_panel"
     assert probe["event_log_parent"] == "left_panel"
     assert probe["splitter_widgets"] == ["left_panel", "center_panel", "right_panel"]
     assert probe["ranking_alignment"] == ["center", "left", "right", "center"]

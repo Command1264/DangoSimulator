@@ -610,10 +610,10 @@ def run() -> int:
 
             root = QWidget()
             root_layout = QVBoxLayout(root)
-            title = QLabel(APP_TITLE)
-            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            title.setStyleSheet("font-size: 22px; font-weight: 700;")
-            root_layout.addWidget(title)
+
+            root_splitter = QSplitter(Qt.Orientation.Vertical)
+            root_splitter.setObjectName("root_splitter")
+            self.root_splitter = root_splitter
 
             main_splitter = QSplitter(Qt.Orientation.Horizontal)
             main_splitter.setObjectName("main_splitter")
@@ -622,8 +622,16 @@ def run() -> int:
             main_splitter.addWidget(self._build_center_panel())
             main_splitter.addWidget(self._build_right_panel())
             main_splitter.setSizes([340, 760, 340])
-            root_layout.addWidget(main_splitter, 1)
-            root_layout.addWidget(self._build_results_panel())
+
+            single_race_group = QGroupBox("單場模擬")
+            single_race_group.setObjectName("single_race_group")
+            single_race_layout = QVBoxLayout(single_race_group)
+            single_race_layout.addWidget(main_splitter)
+
+            root_splitter.addWidget(single_race_group)
+            root_splitter.addWidget(self._build_results_panel())
+            root_splitter.setSizes([650, 260])
+            root_layout.addWidget(root_splitter, 1)
             self.setCentralWidget(root)
 
             self.apply_loaded_settings_to_controls()
@@ -654,6 +662,11 @@ def run() -> int:
             panel = QWidget()
             panel.setObjectName("center_panel")
             layout = QVBoxLayout(panel)
+            self.title_label = QLabel(APP_TITLE)
+            self.title_label.setObjectName("app_title")
+            self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.title_label.setStyleSheet("font-size: 20px; font-weight: 700;")
+            layout.addWidget(self.title_label)
             self.track_scene = TrackScene(panel)
             view = QGraphicsView(self.track_scene)
             view.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -716,6 +729,7 @@ def run() -> int:
 
         def _build_results_panel(self) -> QWidget:
             box = QGroupBox("多輪模擬")
+            box.setObjectName("batch_simulation_group")
             layout = QVBoxLayout(box)
             controls = QHBoxLayout()
             self.run_count = GroupedIntegerSpinBox()
@@ -1273,8 +1287,8 @@ def run() -> int:
 
     app = QApplication([])
     window = MainWindow()
-    window.resize(1480, 840)
-    window.show()
+    window.showMaximized()
+    app.processEvents()
     if os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
         base_state = window.controller.view_state()
 
@@ -1353,7 +1367,19 @@ def run() -> int:
             row_height = table.verticalHeader().defaultSectionSize()
             return table.viewport().height() // row_height
 
+        def orientation_name(splitter: QSplitter) -> str:
+            if splitter.orientation() == Qt.Orientation.Vertical:
+                return "vertical"
+            return "horizontal"
+
         probe = {
+            "window_maximized": window.isMaximized(),
+            "root_splitter_orientation": orientation_name(window.root_splitter),
+            "root_splitter_widgets": [
+                window.root_splitter.widget(index).objectName()
+                for index in range(window.root_splitter.count())
+            ],
+            "title_parent": window.title_label.parentWidget().objectName(),
             "event_log_parent": window.events.parentWidget().objectName(),
             "splitter_widgets": [
                 window.main_splitter.widget(index).objectName()
