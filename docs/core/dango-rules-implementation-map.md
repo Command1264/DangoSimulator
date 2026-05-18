@@ -82,5 +82,5 @@
 ## 預設資料
 
 `data/default_race.json` 依 `docs/core/dango-rules.md` 的「團子技能」排序列出所有一般團子，並在每個 ability 同時保存 `id` 與 `name`。
-預設賽道在第 15 格設定 `midpoint`，並與該格阻遏裝置共存。
+預設賽道在第 25 格設定 `midpoint`，並與該格阻遏裝置共存。
 前 6 顆一般團子預設參賽，其餘團子 `default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。

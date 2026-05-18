@@ -10,11 +10,11 @@
       { "position": 5, "type": "time_rift" },
       { "position": 9, "type": "advance" },
       { "position": 13, "type": "time_rift" },
-      { "position": 15, "type": "midpoint" },
       { "position": 15, "type": "block" },
       { "position": 19, "type": "advance" },
       { "position": 22, "type": "time_rift" },
       { "position": 25, "type": "block" },
+      { "position": 25, "type": "midpoint" },
       { "position": 29, "type": "block" }
     ]
   },
@@ -22,7 +22,7 @@
     {
       "id": "lu",
       "name": "陸・赫斯團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -37,7 +37,7 @@
     {
       "id": "west",
       "name": "西格莉卡團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -52,7 +52,7 @@
     {
       "id": "daphne",
       "name": "達妮亞團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -67,7 +67,7 @@
     {
       "id": "snow",
       "name": "緋雪團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -82,7 +82,7 @@
     {
       "id": "kat",
       "name": "卡提希婭團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -105,7 +105,7 @@
     {
       "id": "fei",
       "name": "菲比團子",
-      "group": "二週年",
+      "group": "A",
       "start_position": 1,
       "abilities": [
         {
@@ -121,7 +121,7 @@
     {
       "id": "chisaki",
       "name": "千咲團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -137,7 +137,7 @@
     {
       "id": "moning",
       "name": "莫寧團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -153,7 +153,7 @@
     {
       "id": "linne",
       "name": "琳奈團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -169,7 +169,7 @@
     {
       "id": "aemiss",
       "name": "愛彌斯團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -186,7 +186,7 @@
     {
       "id": "shorekeeper",
       "name": "守岸人團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -202,7 +202,7 @@
     {
       "id": "colletta",
       "name": "珂萊塔團子",
-      "group": "二週年",
+      "group": "B",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -219,7 +219,7 @@
     {
       "id": "augusta",
       "name": "奧古斯塔團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -235,7 +235,7 @@
     {
       "id": "yuno",
       "name": "尤諾團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -252,7 +252,7 @@
     {
       "id": "floro",
       "name": "弗洛洛團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -268,7 +268,7 @@
     {
       "id": "changli",
       "name": "長離團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -285,7 +285,7 @@
     {
       "id": "jinhsi",
       "name": "今汐團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
@@ -302,7 +302,7 @@
     {
       "id": "calcharo",
       "name": "卡卡羅團子",
-      "group": "二週年",
+      "group": "C",
       "start_position": 1,
       "default_selected": false,
       "abilities": [
