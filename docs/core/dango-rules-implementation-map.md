@@ -1,0 +1,86 @@
+# 小團快跑規則對映表
+
+來源文件：`docs/core/dango-rules.md`
+
+本表排除「結算與晉級說明」。應援獎勵、人氣值獎勵、黑馬值刷新與晉級流程不在本輪實作範圍。
+
+## 流程說明
+
+| 規則 | 對應元件 | 狀態 |
+| --- | --- | --- |
+| 每個賽程 21:00 開賽 | `RaceSupportWindow.race_starts_at` | 已實作 |
+| 應援從前一賽程結束後開放 | `RaceSupportWindow.opens_at` | 已實作 |
+| 應援於 20:30 關閉 | `RaceSupportWindow.closes_at` / `is_open()` | 已實作 |
+
+## 移動與堆疊
+
+| 規則 | 對應元件 | 狀態 |
+| --- | --- | --- |
+| 骰子隨機決定行動順序 | `RaceSimulator._start_round()` | 已實作，每輪洗牌一次 |
+| 每輪流程為回合開始觸發、決定行動順序、全員擲骰、擲骰後觸發、依序移動 | `RaceSimulator._start_round()` / `_apply_round_start_abilities()` / `_apply_after_roll_abilities()` / `step_next()` | 已實作 |
+| 初始同格團子上下堆疊順序隨機 | `RaceSimulator.__init__()` / `_shuffle_stack_preserving_boss_bottom()` | 已實作；固定 seed 可重現，布大王仍維持底部 |
+| 骰子決定前進步數 | `RaceSimulator._roll_for()` / `step_dango()` | 已實作 |
+| 一般團子骰 1-3 | `RaceSimulator._roll_for()` | 已實作 |
+| 終點格已有團子時疊到最上方 | `RaceSimulator._place_group()` | 已實作；布大王依專屬規則永遠在底部 |
+| 任一一般參賽團子抵達終點即完成比賽 | `RaceSimulator._record_finishers()` | 已實作 |
+| 名次依最靠近終點到最遠排序 | `RaceSimulator._live_rankings()` / `_ordered_by_progress()` | 已實作 |
+| 同一格依堆疊由上至下排序 | `RaceSimulator._ordered_by_progress()` | 已實作，完賽名次與即時名次共用 |
+
+## 技能與機制
+
+| 規則 | 對應元件 | 狀態 |
+| --- | --- | --- |
+| 團子每輪行動時有機率發動技能 | `AbilityConfig.probability` / builtin ability handlers | 已實作 |
+| 技能影響行動方式 | `before_move` / `after_move` / `after_roll` / `round_start` / `on_device` triggers | 已實作 |
+| 賽道存在阻礙或幫助前進的機關 | `DeviceType` / `RaceSimulator._apply_device()` | 已實作 |
+
+## 賽道裝置
+
+| 規則 | 對應元件 | 狀態 |
+| --- | --- | --- |
+| 推進裝置向前 1 格 | `DeviceType.ADVANCE` | 已實作 |
+| 阻遏裝置向後 1 格 | `DeviceType.BLOCK` | 已實作 |
+| 時空裂隙重排堆疊 | `DeviceType.TIME_RIFT` / `_open_time_rift()` | 已實作；一般團子隨機重排，布大王仍固定於底部 |
+| 賽程中點標記 | `TrackConfig.midpoint` / `_parse_devices()` / `_crossed_midpoint()` | 已實作；可在 `track.devices` 設定 `type: "midpoint"`，可與同格裝置並存，多個標記只採第一個，停在中點不算經過 |
+
+## 布大王
+
+| 規則 | 對應元件 | 狀態 |
+| --- | --- | --- |
+| 第 1、2 回合一般團子先行動，第 3 回合開始從終點向起點移動 | `_can_act_in_round()` / `_forward_delta()` | 已實作 |
+| 行動時賽道機制對布大王生效 | `_apply_device()` | 已實作 |
+| 布大王骰 1-6 | `_roll_for()` | 已實作 |
+| 推進/阻遏對布大王效果反轉 | `_apply_device()` | 已實作 |
+| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` | 已實作；落點與時空裂隙後都會維持底部 |
+| 行動時不帶走一般團子 | `_take_moving_group()` | 已實作 |
+| 行動前不參與團子之間堆疊排序 | `_is_ranked_participant()` / `_live_rankings()` / `simulate_many()` | 已實作；參賽者模式下第 3 回合前不列入即時與完賽排名，批次統計會按後段名次補計 |
+| 整輪結束後，若布大王前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
+
+## 團子技能
+
+| 團子 | Ability id | 對應元件 | 狀態 |
+| --- | --- | --- | --- |
+| 陸赫斯 | `lu_device_master` | `_device_ability_delta()` | 已實作 |
+| 西格莉卡 | `sigurd_sun_help` | `_apply_after_roll_abilities()` | 已實作；全員擲骰後、第一顆團子移動前標記前方至多兩顆團子 |
+| 達妮亞 | `daphne_same_roll_bonus` | `_apply_builtin_before_move()` | 已實作 |
+| 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |
+| 卡提希婭 | `kat_activate_late_surge`, `kat_late_surge_bonus` | `_apply_after_move_abilities()` / `_apply_builtin_before_move()` | 已實作 |
+| 菲比 | `phoebe_blessing` | `_apply_builtin_before_move()` | 已實作；舊 `phoebe_bonus` 仍保留相容處理 |
+| 千咲 | `chisaki_threshold_analysis` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；使用本輪預擲骰點判定最低骰點之一 |
+| 莫寧 | `moning_precision_calculation` | `_roll_for()` | 已實作 |
+| 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
+| 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
+| 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
+| 珂萊塔 | `colletta_double_authority` | `_apply_builtin_before_move()` | 已實作 |
+| 奧古斯塔 | `augusta_governor_authority` | `_apply_round_start_abilities()` / `_apply_before_move_abilities()` | 已實作；同格至少 2 顆才算堆疊最頂端 |
+| 尤諾 | `yuno_anchor_fate` | `_apply_after_move_abilities()` / `_move_ranked_targets_to_position()` | 已實作 |
+| 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_is_bottom_of_stack()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定，且同格至少 2 顆才算堆疊 |
+| 長離 | `changli_strategic_delay` | `_apply_round_start_abilities()` | 已實作；同格至少 2 顆且下方有團子才算觸發條件 |
+| 今汐 | `jinhsi_magistrate_name` | `_apply_builtin_before_move()` / `_move_to_stack_top()` | 已實作；同格至少 2 顆且頭頂有團子才算觸發條件 |
+| 卡卡羅 | `calcharo_shadow_follow` | `_apply_builtin_before_move()` / `_is_last_regular()` | 已實作 |
+
+## 預設資料
+
+`data/default_race.json` 依 `docs/core/dango-rules.md` 的「團子技能」排序列出所有一般團子，並在每個 ability 同時保存 `id` 與 `name`。
+預設賽道在第 25 格設定 `midpoint`，並與該格阻遏裝置共存。
+前 6 顆一般團子預設參賽，其餘團子 `default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。

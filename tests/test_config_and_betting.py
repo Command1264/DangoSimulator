@@ -37,6 +37,53 @@ def test_load_race_config_parses_devices_and_boss_mode() -> None:
     assert config.seed == 11
 
 
+def test_load_race_config_parses_first_midpoint_marker_and_keeps_coexisting_device() -> None:
+    payload = {
+        "track": {
+            "length": 20,
+            "finish": 20,
+            "devices": [
+                {"position": 15, "type": "midpoint"},
+                {"position": 15, "type": "block"},
+                {"position": 12, "type": "midpoint"},
+            ],
+        },
+        "dangos": [{"id": "a", "name": "A", "start_position": 1}],
+    }
+
+    config = load_race_config(json.dumps(payload))
+
+    assert config.track.midpoint == 15
+    assert config.track.devices[15] == DeviceType.BLOCK
+    assert 12 not in config.track.devices
+
+
+def test_load_race_config_parses_ability_display_name() -> None:
+    payload = {
+        "track": {"length": 8, "finish": 8, "devices": []},
+        "dangos": [
+            {
+                "id": "a",
+                "name": "A",
+                "start_position": 1,
+                "abilities": [
+                    {
+                        "id": "sample_ability",
+                        "name": "顯示技能",
+                        "trigger": "before_move",
+                        "actions": [{"type": "builtin"}],
+                    }
+                ],
+            }
+        ],
+    }
+
+    config = load_race_config(json.dumps(payload))
+
+    assert config.dangos[0].abilities[0].id == "sample_ability"
+    assert config.dangos[0].abilities[0].name == "顯示技能"
+
+
 def test_betting_ledger_settles_with_configurable_formula() -> None:
     formula = BettingFormula(wrong_refund_rate=0.8, rank_rewards={1: 1.0, 2: 0.4})
     ledger = BetLedger(initial_popularity=1000, formula=formula)

@@ -4,6 +4,8 @@
 
 本檔定義可跨專案重用的 AI agent 通用操作規則。
 專案專屬規則放在 `AGENTS.md`。
+每個 repository 的 canonical project rule file 是該 repository 最近且相關的 `AGENTS.md`；
+`SYSTEM.md` 只放跨專案可重用規則，不放單一專案的 branch model 或產品細節。
 
 若規則衝突，優先順序如下：
 
@@ -57,9 +59,10 @@ CHANGE 模式流程：
 
 - Git 是正常開發流程的一部分。
 - 非平凡實作應在 working branch 上進行。
+- 若 `AGENTS.md` 或 `docs/core/git-workflow.md` 定義了專案專屬 Git Flow，必須優先遵守該專案規則。
 - commit message 使用 conventional commits。
 - 不 commit 失敗測試、未驗證變更或無關檔案。
-- 不 push 或 merge，除非使用者明確要求。
+- 不 push、merge 或修改 remote 設定，除非使用者明確要求，或專案規則已定義且使用者已授權該 remote flow。
 
 ## Communication Rules
 

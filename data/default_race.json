@@ -1,5 +1,5 @@
 {
-  "name": "小團快跑小組賽範例",
+  "name": "二週年小團快跑標準地圖",
   "seed": 20260517,
   "boss_ranked": false,
   "track": {
@@ -7,57 +7,313 @@
     "finish": 32,
     "devices": [
       { "position": 3, "type": "advance" },
-      { "position": 6, "type": "time_rift" },
-      { "position": 10, "type": "block" },
-      { "position": 11, "type": "advance" },
-      { "position": 16, "type": "advance" },
-      { "position": 20, "type": "time_rift" },
-      { "position": 23, "type": "advance" },
-      { "position": 28, "type": "block" }
+      { "position": 5, "type": "time_rift" },
+      { "position": 9, "type": "advance" },
+      { "position": 13, "type": "time_rift" },
+      { "position": 15, "type": "block" },
+      { "position": 19, "type": "advance" },
+      { "position": 22, "type": "time_rift" },
+      { "position": 25, "type": "block" },
+      { "position": 25, "type": "midpoint" },
+      { "position": 29, "type": "block" }
     ]
   },
   "dangos": [
     {
       "id": "lu",
       "name": "陸・赫斯團子",
-      "group": "A組",
+      "group": "A",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "lu_device_master",
+          "name": "來顆糖吧",
+          "trigger": "on_device",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "觸發推進裝置時額外前進 3 格；觸發阻遏裝置時額外後退 1 格。"
     },
     {
       "id": "west",
       "name": "西格莉卡團子",
-      "group": "A組",
+      "group": "A",
       "start_position": 1,
-      "ability_note": "每輪標記排名緊鄰自身且更高的至多兩個團子。"
+      "abilities": [
+        {
+          "id": "sigurd_sun_help",
+          "name": "日靈，幫幫忙!",
+          "trigger": "after_roll",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "每輪投骰後，標記排名緊鄰自身且更高的至多兩個團子，使其本回合少前進 1 格。"
     },
     {
       "id": "daphne",
-      "name": "達妮婭團子",
-      "group": "A組",
+      "name": "達妮亞團子",
+      "group": "A",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "daphne_same_roll_bonus",
+          "name": "好事成「雙」",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "投骰子時若與上一次相同，額外前進 2 格。"
     },
     {
       "id": "snow",
       "name": "緋雪團子",
-      "group": "A組",
+      "group": "A",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "snow_bird",
+          "name": "引路白鳥",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "與布大王相遇後，每次移動額外前進 1 格。"
     },
     {
       "id": "kat",
       "name": "卡提希婭團子",
-      "group": "A組",
+      "group": "A",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "kat_activate_late_surge",
+          "name": "翻盤橋段",
+          "trigger": "after_move",
+          "once_per_race": true,
+          "actions": [{ "type": "builtin" }]
+        },
+        {
+          "id": "kat_late_surge_bonus",
+          "name": "翻盤橋段",
+          "trigger": "before_move",
+          "probability": 0.6,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "自身移動結束後若處於最後一名，剩餘回合 60% 機率額外前進 2 格。"
     },
     {
       "id": "fei",
       "name": "菲比團子",
-      "group": "A組",
+      "group": "A",
       "start_position": 1,
+      "abilities": [
+        {
+          "id": "phoebe_blessing",
+          "name": "歲主庇佑",
+          "trigger": "before_move",
+          "probability": 0.5,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
       "ability_note": "50% 機率額外前進 1 格。"
+    },
+    {
+      "id": "chisaki",
+      "name": "千咲團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "chisaki_threshold_analysis",
+          "name": "視閾解明",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "投骰子時，若投出的結果為本輪所有點數最小之一，額外前進 2 格。"
+    },
+    {
+      "id": "moning",
+      "name": "莫寧團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "moning_precision_calculation",
+          "name": "精密演算",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "投骰子時，點數固定以 3 / 2 / 1 循環出現。"
+    },
+    {
+      "id": "linne",
+      "name": "琳奈團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "linne_colorful",
+          "name": "炫彩時刻!",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "每回合 60% 機率雙倍點數移動，20% 機率無法移動。"
+    },
+    {
+      "id": "aemiss",
+      "name": "愛彌斯團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "aemiss_ghost",
+          "name": "電子幽靈登場",
+          "trigger": "after_move",
+          "once_per_race": true,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "每場一次，經過賽程中點後傳送到前方最近非布大王團子頂端。"
+    },
+    {
+      "id": "shorekeeper",
+      "name": "守岸人團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "shorekeeper_future",
+          "name": "收束的未來",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "骰子只會擲出 2 或 3。"
+    },
+    {
+      "id": "colletta",
+      "name": "珂萊塔團子",
+      "group": "B",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "colletta_double_authority",
+          "name": "利潤加倍",
+          "trigger": "before_move",
+          "probability": 0.28,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "28% 機率以骰子的雙倍點數前進。"
+    },
+    {
+      "id": "augusta",
+      "name": "奧古斯塔團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "augusta_governor_authority",
+          "name": "總督權柄",
+          "trigger": "round_start",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "回合開始時若處於堆疊最頂端，則本回合不行動，且下回合最後行動。"
+    },
+    {
+      "id": "yuno",
+      "name": "尤諾團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "yuno_anchor_fate",
+          "name": "錨定命途",
+          "trigger": "after_move",
+          "once_per_race": true,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "每場一次，經過賽程中點後將排名前後的非布大王團子傳送至自己的格子。"
+    },
+    {
+      "id": "floro",
+      "name": "弗洛洛團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "floro_bottom_bonus",
+          "name": "優雅陰謀",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "回合開始時若處於堆疊最底層，移動時額外前進 3 格。"
+    },
+    {
+      "id": "changli",
+      "name": "長離團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "changli_strategic_delay",
+          "name": "謀而後定",
+          "trigger": "round_start",
+          "probability": 0.65,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "如果下方堆疊其他團子，下一回合有 65% 機率最後一個行動。"
+    },
+    {
+      "id": "jinhsi",
+      "name": "今汐團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "jinhsi_magistrate_name",
+          "name": "令尹之名",
+          "trigger": "before_move",
+          "probability": 0.4,
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "如果頭頂堆疊其他團子，有 40% 機率移動到所有團子的最上方。"
+    },
+    {
+      "id": "calcharo",
+      "name": "卡卡羅團子",
+      "group": "C",
+      "start_position": 1,
+      "default_selected": false,
+      "abilities": [
+        {
+          "id": "calcharo_shadow_follow",
+          "name": "如影隨形",
+          "trigger": "before_move",
+          "actions": [{ "type": "builtin" }]
+        }
+      ],
+      "ability_note": "開始移動時如果在最後一名，額外前進 3 格。"
     },
     {
       "id": "boss",

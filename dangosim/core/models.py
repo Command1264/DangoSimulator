@@ -18,12 +18,17 @@ class TrackConfig:
     length: int
     finish: int
     devices: Mapping[int, DeviceType] = field(default_factory=dict)
+    midpoint: int | float | None = None
 
     def __post_init__(self) -> None:
         if self.length < 2:
             raise ValueError("Track length must be at least 2.")
         if not 1 <= self.finish <= self.length:
             raise ValueError("Finish must be inside the track.")
+        midpoint = self.midpoint if self.midpoint is not None else self.finish / 2
+        if not 1 <= midpoint <= self.length:
+            raise ValueError("Midpoint must be inside the track.")
+        object.__setattr__(self, "midpoint", midpoint)
 
         normalized: dict[int, DeviceType] = {}
         for position, device in self.devices.items():
@@ -51,6 +56,7 @@ class AbilityAction:
 class AbilityConfig:
     id: str
     trigger: str
+    name: str = ""
     conditions: tuple[AbilityCondition, ...] = ()
     actions: tuple[AbilityAction, ...] = ()
     probability: float = 1.0
@@ -59,6 +65,8 @@ class AbilityConfig:
     def __post_init__(self) -> None:
         if not self.id:
             raise ValueError("Ability id is required.")
+        if not self.name:
+            object.__setattr__(self, "name", self.id)
         if not 0 <= self.probability <= 1:
             raise ValueError("Ability probability must be between 0 and 1.")
 
@@ -73,6 +81,7 @@ class DangoConfig:
     abilities: tuple[AbilityConfig, ...] = ()
     group: str = "預設"
     skill_note: str = ""
+    default_selected: bool = True
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -87,6 +96,8 @@ class RaceConfig:
     dangos: list[DangoConfig]
     seed: int | None = None
     boss_ranked: bool = False
+    initial_stack_order: Mapping[str, int] = field(default_factory=dict)
+    first_round_order: Mapping[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.dangos:
@@ -98,6 +109,20 @@ class RaceConfig:
             if not 1 <= dango.start_position <= self.track.length:
                 raise ValueError(f"Start position for {dango.id} is outside the track.")
             seen.add(dango.id)
+        object.__setattr__(self, "initial_stack_order", MappingProxyType(_normalize_order_map(self.initial_stack_order, seen)))
+        object.__setattr__(self, "first_round_order", MappingProxyType(_normalize_order_map(self.first_round_order, seen)))
+
+
+def _normalize_order_map(raw: Mapping[str, int], known_ids: set[str]) -> dict[str, int]:
+    normalized: dict[str, int] = {}
+    for dango_id, order in raw.items():
+        if dango_id not in known_ids:
+            continue
+        order_value = int(order)
+        if order_value < 1:
+            raise ValueError("Order values must be positive integers.")
+        normalized[str(dango_id)] = order_value
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -124,4 +149,9 @@ class RaceSnapshot:
     stacks: Mapping[int, list[str]]
     event_log: tuple[EventRecord, ...]
     rankings: tuple[str, ...]
+    live_rankings: tuple[str, ...]
+    round_number: int
     finished: bool
+    round_order: tuple[str, ...] = ()
+    round_rolls: Mapping[str, int] = field(default_factory=dict)
+    remaining_round_order: tuple[str, ...] = ()
