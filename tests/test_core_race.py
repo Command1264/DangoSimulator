@@ -28,6 +28,42 @@ def test_step_next_uses_one_randomized_action_order_per_round() -> None:
     actors = [simulator.step_next().dango_id for _ in range(3)]
 
     assert set(actors) == {"a", "b", "c"}
+    assert actors == ["b", "c", "a"]
+
+
+def test_initial_stack_order_is_randomized_with_seed() -> None:
+    config = RaceConfig(
+        track=TrackConfig(length=8, finish=8),
+        dangos=[
+            DangoConfig(id="a", name="A", start_position=1),
+            DangoConfig(id="b", name="B", start_position=1),
+            DangoConfig(id="c", name="C", start_position=1),
+            DangoConfig(id="d", name="D", start_position=1),
+        ],
+        seed=0,
+    )
+
+    first = RaceSimulator(config).snapshot().stacks[1]
+    second = RaceSimulator(config).snapshot().stacks[1]
+
+    assert first == ["c", "a", "b", "d"]
+    assert second == first
+
+
+def test_initial_stack_shuffle_keeps_boss_at_bottom() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=8, finish=8),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="boss", name="布大王", start_position=1, is_boss=True, ranked=False),
+                DangoConfig(id="b", name="B", start_position=1),
+            ],
+            seed=0,
+        )
+    )
+
+    assert simulator.snapshot().stacks[1][0] == "boss"
 
 
 def test_dangos_stack_when_they_land_on_the_same_cell_and_bottom_carries_top() -> None:

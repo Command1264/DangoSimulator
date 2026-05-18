@@ -31,7 +31,10 @@ class RaceSimulator:
         self._stacks = {position: [] for position in range(1, config.track.length + 1)}
         for dango in config.dangos:
             self._stacks[dango.start_position].append(dango.id)
-        # Initial co-location is not treated as a landed stack until pieces move.
+        for stack in self._stacks.values():
+            self._shuffle_stack_preserving_boss_bottom(stack)
+        # Initial co-location is visible as randomized stack order, but is not
+        # treated as a carried stack until pieces move.
         self._stack_active: set[str] = set()
         self._event_log: list[EventRecord] = []
         self._rankings: list[str] = []
@@ -458,10 +461,7 @@ class RaceSimulator:
 
     def _open_time_rift(self, position: int) -> None:
         stack = self._stacks[position]
-        bosses = [dango_id for dango_id in stack if self._dangos[dango_id].is_boss]
-        regulars = [dango_id for dango_id in stack if not self._dangos[dango_id].is_boss]
-        self._rng.shuffle(regulars)
-        stack[:] = bosses + regulars
+        self._shuffle_stack_preserving_boss_bottom(stack)
         self._event_log.append(
             EventRecord(
                 event_type="time_rift",
@@ -469,6 +469,14 @@ class RaceSimulator:
                 data={"position": position, "stack": list(stack)},
             )
         )
+
+    def _shuffle_stack_preserving_boss_bottom(self, stack: list[str]) -> None:
+        if len(stack) < 2:
+            return
+        bosses = [dango_id for dango_id in stack if self._dangos[dango_id].is_boss]
+        regulars = [dango_id for dango_id in stack if not self._dangos[dango_id].is_boss]
+        self._rng.shuffle(regulars)
+        stack[:] = bosses + regulars
 
     def _record_finishers(self) -> None:
         if self._finished:

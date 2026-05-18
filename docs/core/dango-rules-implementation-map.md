@@ -17,6 +17,7 @@
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
 | 骰子隨機決定行動順序 | `RaceSimulator._start_round()` | 已實作，每輪洗牌一次 |
+| 初始同格團子上下堆疊順序隨機 | `RaceSimulator.__init__()` / `_shuffle_stack_preserving_boss_bottom()` | 已實作；固定 seed 可重現，布大王仍維持底部 |
 | 骰子決定前進步數 | `RaceSimulator._roll_for()` / `step_dango()` | 已實作 |
 | 一般團子骰 1-3 | `RaceSimulator._roll_for()` | 已實作 |
 | 終點格已有團子時疊到最上方 | `RaceSimulator._place_group()` | 已實作；布大王依專屬規則永遠在底部 |

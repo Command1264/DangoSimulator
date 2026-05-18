@@ -259,17 +259,18 @@ def test_linne_unable_to_move_does_not_trigger_device_or_change_stack() -> None:
                 "abilities": [{"id": "linne_colorful", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
             },
         ],
-        "seed": 1,
+        "seed": 2,
     }
 
     simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    initial_stack = list(simulator.snapshot().stacks[3])
     result = simulator.step_dango("linne", 2)
     snapshot = simulator.snapshot()
 
     assert result.to_position == 3
     assert result.device_triggered.value == "blank"
     assert snapshot.positions["linne"] == 3
-    assert snapshot.stacks[3] == ["other", "linne"]
+    assert snapshot.stacks[3] == initial_stack
     assert all(event.event_type != "device" for event in snapshot.event_log)
 
 
