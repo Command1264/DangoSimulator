@@ -8,10 +8,13 @@ from dangosim.gui.view_models import (
     avatar_label_for_name,
     build_participant_cards,
     build_race_config_from_cards,
+    dango_display_name,
+    device_display_name,
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
     rank_simulation_rows,
+    track_cell_tooltip,
 )
 import pytest
 
@@ -75,6 +78,20 @@ def test_format_event_log_message_only_indents_detail_events() -> None:
     assert format_event_log_message("第 1 回合行動順序：陸赫斯團子、菲比團子") == "第 1 回合行動順序：陸赫斯團子、菲比團子"
     assert format_event_log_message("比賽結束，菲比團子 取得第 1 名。") == "比賽結束，菲比團子 取得第 1 名。"
     assert format_event_log_message("菲比團子 觸發 推進裝置") == "　　菲比團子 觸發 推進裝置"
+
+
+def test_track_cell_tooltip_uses_device_display_names_not_ids() -> None:
+    assert device_display_name("advance") == "推進裝置"
+    assert device_display_name("block") == "阻遏裝置"
+    assert device_display_name("time_rift") == "時空裂隙"
+    assert track_cell_tooltip(index=3, device="advance", is_midpoint=False) == "格 3 推進裝置"
+    assert track_cell_tooltip(index=15, device="block", is_midpoint=True) == "格 15 阻遏裝置 / 中點"
+
+
+def test_visible_dango_name_fallback_does_not_expose_id() -> None:
+    assert dango_display_name("lu", {"lu": "陸赫斯團子"}) == "陸赫斯團子"
+    assert dango_display_name("unknown_id", {}) == "未知團子"
+    assert dango_display_name(None, {}) == "-"
 
 
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:

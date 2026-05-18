@@ -36,11 +36,14 @@ from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
     RaceViewState,
+    avatar_label_for_name,
     build_participant_cards,
     build_race_config_from_cards,
+    dango_display_name,
     format_event_log_message,
     is_auto_play_control_enabled,
     is_seed_input_enabled,
+    track_cell_tooltip,
 )
 from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
@@ -204,10 +207,7 @@ def run() -> int:
                 pen_color = "#d2a72c" if is_midpoint else "#6a7783"
                 item = self.addEllipse(x - 9, y - 9, 18, 18, QPen(QColor(pen_color), 2 if is_midpoint else 1), QColor(color))
                 item.setZValue(10)
-                labels = [device] if device else ["空白"]
-                if is_midpoint:
-                    labels.append("中點")
-                item.setToolTip(f"格 {index} {' / '.join(labels)}")
+                item.setToolTip(track_cell_tooltip(index=index, device=device, is_midpoint=is_midpoint))
                 if index == config.track.finish:
                     finish_label = self.addText("終")
                     finish_label.setZValue(20)
@@ -233,7 +233,7 @@ def run() -> int:
                 piece.setBrush(QColor(color))
                 piece.setPen(QPen(QColor("#2f3a44"), 2))
                 piece.setZValue(layer.piece_z)
-                piece.setToolTip(state.dango_names.get(dango_id, dango_id))
+                piece.setToolTip(dango_display_name(dango_id, state.dango_names))
                 self.addItem(piece)
                 if dango_id == state.current_actor:
                     highlight = QGraphicsEllipseItem(x - 19, y - 32 + offset_y, 38, 38)
@@ -241,7 +241,12 @@ def run() -> int:
                     highlight.setPen(QPen(QColor("#f0c64a"), 3))
                     highlight.setZValue(layer.highlight_z)
                     self.addItem(highlight)
-                label = QGraphicsTextItem(state.avatar_labels.get(dango_id, dango_id[:1]))
+                label = QGraphicsTextItem(
+                    state.avatar_labels.get(
+                        dango_id,
+                        avatar_label_for_name(dango_display_name(dango_id, state.dango_names)),
+                    )
+                )
                 label.setDefaultTextColor(QColor("#101820"))
                 label.setZValue(layer.label_z)
                 label.setPos(x - 12, y - 26 + offset_y)
@@ -583,7 +588,7 @@ def run() -> int:
 
         def render_state(self, state: RaceViewState) -> None:
             self.track_scene.render_state(self.active_config, state)
-            actor_name = state.dango_names.get(state.current_actor, state.current_actor or "-")
+            actor_name = dango_display_name(state.current_actor, state.dango_names)
             round_text = f"第 {state.round_number} 輪" if state.round_number else "尚未開始"
             self.dice_label.setText(
                 f"{round_text}｜行動：{actor_name}　骰子："

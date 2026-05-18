@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
 
 from dangosim.core.models import DangoConfig, RaceConfig
+
+DEVICE_DISPLAY_NAMES = {
+    "": "空白",
+    "blank": "空白",
+    "advance": "推進裝置",
+    "block": "阻遏裝置",
+    "time_rift": "時空裂隙",
+}
 
 
 class BossMode(str, Enum):
@@ -98,6 +107,23 @@ def build_participant_cards(config: RaceConfig) -> list[ParticipantCardState]:
 def avatar_label_for_name(name: str) -> str:
     stripped = name.strip()
     return stripped[0] if stripped else "?"
+
+
+def dango_display_name(dango_id: str | None, dango_names: Mapping[str, str]) -> str:
+    if dango_id is None:
+        return "-"
+    return dango_names.get(dango_id, "未知團子")
+
+
+def device_display_name(device: str) -> str:
+    return DEVICE_DISPLAY_NAMES.get(device, "未知裝置")
+
+
+def track_cell_tooltip(*, index: int, device: str, is_midpoint: bool) -> str:
+    labels = [device_display_name(device)]
+    if is_midpoint:
+        labels.append("中點")
+    return f"格 {index} {' / '.join(labels)}"
 
 
 def format_event_log_message(message: str) -> str:

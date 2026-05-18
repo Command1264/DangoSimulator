@@ -11,6 +11,7 @@ from dangosim.gui.view_models import (
     RankingViewRow,
     SimulationResultRow,
     avatar_label_for_name,
+    dango_display_name,
     rank_simulation_rows,
 )
 from dangosim.randomness import SeedMode, resolve_seed
@@ -105,9 +106,12 @@ def _view_state_from_snapshot(
     ranking_rows = tuple(
         RankingViewRow(
             dango_id=dango_id,
-            name=dango_names.get(dango_id, dango_id),
+            name=dango_display_name(dango_id, dango_names),
             position=snapshot.positions[dango_id],
-            avatar_label=avatar_labels.get(dango_id, avatar_label_for_name(dango_id)),
+            avatar_label=avatar_labels.get(
+                dango_id,
+                avatar_label_for_name(dango_display_name(dango_id, dango_names)),
+            ),
         )
         for dango_id in snapshot.live_rankings
     )
