@@ -3,17 +3,19 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import multiprocessing
 from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
+from dangosim.core.batch import simulate_many
 from dangosim.core.config_loader import ConfigValidationError, load_race_config
 from dangosim.core.models import RaceConfig
-from dangosim.core.simulator import RaceSimulator
 from dangosim.randomness import SeedMode, resolve_seed
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    multiprocessing.freeze_support()
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -31,6 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
     simulate.add_argument("--runs", type=int, default=1000, help="模擬場數")
     simulate.add_argument("--seed", type=int, default=None, help="固定隨機種子")
     simulate.add_argument("--seed-mode", choices=[mode.value for mode in SeedMode], default=SeedMode.FIXED.value, help="seed 模式")
+    simulate.add_argument("--workers", default="1", help="平行處理數量，使用 auto、full 或正整數")
     simulate.add_argument("--out", required=True, help="輸出檔案")
     simulate.add_argument("--format", choices=["json", "csv"], default="json", help="輸出格式")
     return parser
@@ -51,7 +54,16 @@ def _run_simulate(args: argparse.Namespace) -> int:
         resolved_seed = resolve_seed(mode=seed_mode, requested_seed=args.seed, config_seed=config.seed)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    summary = simulate_many(config, runs=args.runs, seed=resolved_seed.seed, seed_mode=resolved_seed.mode)
+    try:
+        summary = simulate_many(
+            _default_selected_config(config),
+            runs=args.runs,
+            seed=resolved_seed.seed,
+            seed_mode=resolved_seed.mode,
+            workers=args.workers,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "json":
@@ -66,43 +78,9 @@ def _run_simulate(args: argparse.Namespace) -> int:
     return 0
 
 
-def simulate_many(
-    config: RaceConfig,
-    *,
-    runs: int,
-    seed: int | None,
-    seed_mode: SeedMode = SeedMode.FIXED,
-) -> dict[str, object]:
-    dango_names = {dango.id: dango.name for dango in config.dangos}
-    ranked_ids = [
-        dango.id for dango in config.dangos if dango.ranked or (dango.is_boss and config.boss_ranked)
-    ]
-    wins = {dango_id: 0 for dango_id in ranked_ids}
-    rank_totals = {dango_id: 0 for dango_id in ranked_ids}
-
-    for index in range(runs):
-        run_seed = (seed if seed is not None else config.seed or 0) + index
-        run_config = replace(config, seed=run_seed)
-        snapshot = RaceSimulator(run_config).run_until_finished()
-        rankings = list(snapshot.rankings)
-        if rankings:
-            wins[rankings[0]] += 1
-        for rank_index, dango_id in enumerate(rankings, start=1):
-            rank_totals[dango_id] += rank_index
-
-    results = []
-    for dango_id in ranked_ids:
-        results.append(
-            {
-                "dango_id": dango_id,
-                "name": dango_names[dango_id],
-                "wins": wins[dango_id],
-                "win_rate": wins[dango_id] / runs,
-                "average_rank": rank_totals[dango_id] / runs if runs else 0,
-            }
-        )
-    results.sort(key=lambda item: (-float(item["win_rate"]), str(item["dango_id"])))
-    return {"runs": runs, "seed_mode": seed_mode.value, "base_seed": seed, "results": results}
+def _default_selected_config(config: RaceConfig) -> RaceConfig:
+    selected = [dango for dango in config.dangos if dango.default_selected or dango.is_boss]
+    return replace(config, dangos=selected)
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]], *, seed_mode: str, base_seed: int) -> None:
@@ -116,4 +94,5 @@ def _write_csv(path: Path, rows: list[dict[str, object]], *, seed_mode: str, bas
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     raise SystemExit(main())

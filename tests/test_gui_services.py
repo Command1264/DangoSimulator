@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dangosim.core.config_loader import load_race_config
+from dangosim.core.models import DangoConfig, RaceConfig, TrackConfig
 from dangosim.gui.services import GuiRaceController, run_batch_simulation
 from dangosim.gui.view_models import build_participant_cards, build_race_config_from_cards
 from dangosim.randomness import SeedMode
@@ -20,10 +21,45 @@ def test_gui_race_controller_exposes_initial_and_step_view_state() -> None:
     after_step = controller.step()
 
     assert initial.finished is False
+    assert initial.round_number == 0
+    assert after_step.round_number == 1
     assert after_step.current_actor is not None
     assert after_step.last_roll is not None
     assert after_step.positions != initial.positions
     assert set(after_step.devices.values())
+    assert after_step.ranking_rows
+    assert all(row.name for row in after_step.ranking_rows)
+    assert all(row.avatar_label for row in after_step.ranking_rows)
+
+
+def test_gui_race_controller_exposes_round_action_rows_with_statuses() -> None:
+    controller = GuiRaceController(
+        RaceConfig(
+            track=TrackConfig(length=20, finish=20),
+            dangos=[
+                DangoConfig(id="a", name="A", start_position=1),
+                DangoConfig(id="b", name="B", start_position=2),
+            ],
+            seed=1,
+            first_round_order={"a": 1, "b": 2},
+        )
+    )
+
+    first = controller.step()
+    second = controller.step()
+
+    assert [(row.order, row.dango_id, row.status) for row in first.action_rows] == [
+        (1, "a", "目前"),
+        (2, "b", "待行動"),
+    ]
+    assert first.action_rows[0].roll == first.last_roll
+    assert all(row.roll is not None for row in first.action_rows)
+    assert first.action_rows[0].name == "A"
+    assert first.action_rows[0].avatar_label == "A"
+    assert [(row.order, row.dango_id, row.status) for row in second.action_rows] == [
+        (1, "a", "已行動"),
+        (2, "b", "目前"),
+    ]
 
 
 def test_gui_race_controller_reset_returns_to_initial_positions() -> None:
@@ -53,3 +89,41 @@ def test_run_batch_simulation_can_resolve_system_seed() -> None:
 
     assert result.seed_mode == SeedMode.SYSTEM
     assert isinstance(result.seed, int)
+
+
+def test_run_batch_simulation_reports_progress() -> None:
+    progress: list[tuple[int, int]] = []
+
+    result = run_batch_simulation(
+        _selected_config(),
+        runs=5,
+        seed=99,
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+    )
+
+    assert result.completed_runs == 5
+    assert result.total_runs == 5
+    assert result.cancelled is False
+    assert progress == [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)]
+
+
+def test_run_batch_simulation_can_cancel_after_progress_callback() -> None:
+    should_cancel = False
+
+    def progress_callback(completed: int, total: int) -> None:
+        nonlocal should_cancel
+        if completed == 2:
+            should_cancel = True
+
+    result = run_batch_simulation(
+        _selected_config(),
+        runs=5,
+        seed=99,
+        progress_callback=progress_callback,
+        cancel_requested=lambda: should_cancel,
+    )
+
+    assert result.completed_runs == 2
+    assert result.total_runs == 5
+    assert result.cancelled is True
+    assert sum(row.wins for row in result.rows) == 2
