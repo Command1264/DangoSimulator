@@ -43,6 +43,9 @@ def test_default_race_json_orders_dangos_like_rules_and_names_abilities() -> Non
         "卡卡羅團子",
     ]
     assert all(ability.name for dango in config.dangos for ability in dango.abilities)
+    phoebe_ability = next(dango.abilities[0] for dango in config.dangos if dango.id == "fei")
+    assert phoebe_ability.id == "phoebe_blessing"
+    assert phoebe_ability.name == "歲主庇佑"
 
 
 def test_cli_simulate_writes_json_summary(tmp_path: Path) -> None:

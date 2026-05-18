@@ -273,6 +273,34 @@ def test_linne_unable_to_move_does_not_trigger_device_or_change_stack() -> None:
     assert all(event.event_type != "device" for event in snapshot.event_log)
 
 
+def test_phoebe_blessing_uses_named_ability_id() -> None:
+    payload = {
+        "track": {"length": 10, "finish": 10, "devices": []},
+        "dangos": [
+            {
+                "id": "fei",
+                "name": "菲比",
+                "start_position": 1,
+                "abilities": [
+                    {
+                        "id": "phoebe_blessing",
+                        "name": "歲主庇佑",
+                        "trigger": "before_move",
+                        "probability": 1.0,
+                        "actions": [{"type": "builtin"}],
+                    }
+                ],
+            },
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_dango("fei", 1)
+
+    assert result.to_position == 3
+    assert "ability:phoebe_blessing" in result.reasons
+
+
 def test_floro_uses_round_start_bottom_state_for_bonus() -> None:
     payload = {
         "track": {"length": 20, "finish": 20, "devices": []},
@@ -365,6 +393,27 @@ def test_chisaki_compares_against_full_round_roll_snapshot_after_others_act() ->
 
     assert "ability:chisaki_threshold_analysis" not in result.reasons
     assert result.to_position == 3
+
+
+def test_chisaki_does_not_trigger_without_round_roll_snapshot() -> None:
+    payload = {
+        "track": {"length": 20, "finish": 20, "devices": []},
+        "dangos": [
+            {
+                "id": "chisaki",
+                "name": "千咲",
+                "start_position": 1,
+                "abilities": [{"id": "chisaki_threshold_analysis", "name": "視閾解明", "trigger": "before_move", "actions": [{"type": "builtin"}]}],
+            },
+            {"id": "other", "name": "Other", "start_position": 1},
+        ],
+    }
+
+    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
+    result = simulator.step_dango("chisaki", 3)
+
+    assert "ability:chisaki_threshold_analysis" not in result.reasons
+    assert result.to_position == 4
 
 
 def test_moning_rolls_three_two_one_cycle() -> None:

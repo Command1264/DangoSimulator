@@ -39,7 +39,7 @@
 - `lu_device_master`：陸赫斯觸發推進時額外前進 3 格，觸發阻遏時額外後退 1 格。
 - `daphne_same_roll_bonus`：達妮亞若骰出與上次相同點數，額外前進 2 格。
 - `kat_activate_late_surge` / `kat_late_surge_bonus`：卡提希婭每場最多一次在最後一名時進入追趕狀態，後續 60% 額外前進 2 格。
-- `phoebe_bonus`：菲比 50% 額外前進 1 格。
+- `phoebe_blessing`：菲比「歲主庇佑」，50% 額外前進 1 格。舊 `phoebe_bonus` 仍保留相容處理。
 - `chisaki_threshold_analysis`：千咲若本輪骰點為最低之一，額外前進 2 格。
 - `moning_precision_calculation`：莫寧骰點固定以 3 / 2 / 1 循環。
 - `colletta_double_authority`：珂萊塔 28% 以雙倍點數移動。

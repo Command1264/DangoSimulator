@@ -63,7 +63,7 @@
 | 達妮亞 | `daphne_same_roll_bonus` | `_apply_builtin_before_move()` | 已實作 |
 | 緋雪 | `snow_bird` | `_update_boss_meeting_flags()` / `_apply_builtin_before_move()` | 已實作 |
 | 卡提希婭 | `kat_activate_late_surge`, `kat_late_surge_bonus` | `_apply_after_move_abilities()` / `_apply_builtin_before_move()` | 已實作 |
-| 菲比 | `phoebe_bonus` | `_apply_builtin_before_move()` | 已實作 |
+| 菲比 | `phoebe_blessing` | `_apply_builtin_before_move()` | 已實作；舊 `phoebe_bonus` 仍保留相容處理 |
 | 千咲 | `chisaki_threshold_analysis` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；使用本輪預擲骰點判定最低骰點之一 |
 | 莫寧 | `moning_precision_calculation` | `_roll_for()` | 已實作 |
 | 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |

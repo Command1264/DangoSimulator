@@ -109,8 +109,8 @@
       "start_position": 1,
       "abilities": [
         {
-          "id": "phoebe_bonus",
-          "name": "額外前進",
+          "id": "phoebe_blessing",
+          "name": "歲主庇佑",
           "trigger": "before_move",
           "probability": 0.5,
           "actions": [{ "type": "builtin" }]

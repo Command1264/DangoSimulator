@@ -347,11 +347,13 @@ class RaceSimulator:
             if "kat_late_surge_active" in self._ability_flags[dango_id] and self._rng.random() < ability.probability:
                 return _BuiltinBeforeMoveResult(roll + 2)
             return _BuiltinBeforeMoveResult(roll)
-        if ability.id == "phoebe_bonus":
+        if ability.id in {"phoebe_blessing", "phoebe_bonus"}:
             return _BuiltinBeforeMoveResult(roll + 1 if self._rng.random() < ability.probability else roll)
         if ability.id == "chisaki_threshold_analysis":
+            if dango_id not in self._round_rolls:
+                return _BuiltinBeforeMoveResult(roll)
             round_rolls = self._round_rolls.values()
-            min_roll = min(round_rolls) if round_rolls else roll
+            min_roll = min(round_rolls)
             return _BuiltinBeforeMoveResult(roll + 2 if roll == min_roll else roll)
         if ability.id == "colletta_double_authority":
             return _BuiltinBeforeMoveResult(roll * 2 if self._rng.random() < ability.probability else roll)
