@@ -32,6 +32,7 @@ from dangosim.gui.settings import (
     UserSettingsStore,
     apply_settings_to_cards,
 )
+from dangosim.gui.tooltips import TooltipRect, TooltipSize, choose_tooltip_position
 from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
@@ -54,8 +55,8 @@ APP_TITLE = "DangoSimulator 小團快跑模擬器"
 def run() -> int:
     multiprocessing.freeze_support()
     try:
-        from PySide6.QtCore import QThread, QTimer, Qt, Signal
-        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QValidator
+        from PySide6.QtCore import QPoint, QThread, QTimer, Qt, Signal
+        from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap, QValidator
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -80,6 +81,7 @@ def run() -> int:
             QSplitter,
             QTableWidget,
             QTableWidgetItem,
+            QToolTip,
             QVBoxLayout,
             QWidget,
         )
@@ -182,6 +184,59 @@ def run() -> int:
         def __init__(self, parent: QWidget | None = None) -> None:
             super().__init__(parent)
             self.setSceneRect(0, 0, 620, 460)
+
+        def helpEvent(self, event) -> None:  # noqa: N802 - Qt override name
+            item = next((candidate for candidate in self.items(event.scenePos()) if candidate.toolTip()), None)
+            if item is None:
+                QToolTip.hideText()
+                event.ignore()
+                return
+            view = self._view_for_tooltip(event.widget())
+            if view is None:
+                QToolTip.showText(event.screenPos(), item.toolTip())
+                event.accept()
+                return
+            QToolTip.showText(self._tooltip_global_position(view, item, item.toolTip()), item.toolTip(), view.viewport())
+            event.accept()
+
+        def _view_for_tooltip(self, widget):
+            views = self.views()
+            if not views:
+                return None
+            if widget is not None:
+                for view in views:
+                    if view.viewport() is widget:
+                        return view
+            return views[0]
+
+        def _tooltip_global_position(self, view, item, text: str) -> QPoint:
+            scene_rect = item.sceneBoundingRect()
+            top_left = view.mapFromScene(scene_rect.topLeft())
+            bottom_right = view.mapFromScene(scene_rect.bottomRight())
+            left = min(top_left.x(), bottom_right.x())
+            top = min(top_left.y(), bottom_right.y())
+            right = max(top_left.x(), bottom_right.x())
+            bottom = max(top_left.y(), bottom_right.y())
+            target_top_left = view.viewport().mapToGlobal(QPoint(left, top))
+            viewport_top_left = view.viewport().mapToGlobal(QPoint(0, 0))
+            metrics = QFontMetrics(QToolTip.font())
+            text_rect = metrics.boundingRect(text)
+            x, y = choose_tooltip_position(
+                target=TooltipRect(
+                    x=target_top_left.x(),
+                    y=target_top_left.y(),
+                    width=max(1, right - left),
+                    height=max(1, bottom - top),
+                ),
+                tooltip=TooltipSize(width=text_rect.width() + 18, height=text_rect.height() + 12),
+                viewport=TooltipRect(
+                    x=viewport_top_left.x(),
+                    y=viewport_top_left.y(),
+                    width=view.viewport().width(),
+                    height=view.viewport().height(),
+                ),
+            )
+            return QPoint(x, y)
 
         def render_state(self, config: RaceConfig, state: RaceViewState) -> None:
             self.clear()
