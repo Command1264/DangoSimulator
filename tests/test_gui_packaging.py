@@ -66,3 +66,47 @@ def test_gui_dashboard_can_create_window_offscreen(tmp_path: Path) -> None:
     saved = json.loads(settings_path.read_text(encoding="utf-8"))
     assert saved["single_race"]["auto_play"] is True
     assert saved["batch_simulation"]["workers"] == "1"
+
+
+def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_GUI_LAYOUT_PROBE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {"auto_play": False},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "綜合分數",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = json.loads(result.stdout)
+    assert probe["event_log_parent"] == "left_panel"
+    assert probe["splitter_widgets"] == ["left_panel", "center_panel", "right_panel"]
+    assert probe["ranking_alignment"] == ["center", "left", "right", "center"]
+    assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
+    assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]

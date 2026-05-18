@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import multiprocessing
 import os
@@ -38,6 +39,7 @@ from dangosim.gui.view_models import (
     BossMode,
     ParticipantCardState,
     RaceViewState,
+    SimulationResultRow,
     avatar_label_for_name,
     build_participant_cards,
     build_race_config_from_cards,
@@ -612,11 +614,12 @@ def run() -> int:
             root_layout.addWidget(title)
 
             main_splitter = QSplitter(Qt.Orientation.Horizontal)
+            main_splitter.setObjectName("main_splitter")
+            self.main_splitter = main_splitter
             main_splitter.addWidget(self._build_left_panel())
             main_splitter.addWidget(self._build_center_panel())
             main_splitter.addWidget(self._build_right_panel())
-            main_splitter.addWidget(self._build_event_panel())
-            main_splitter.setSizes([260, 620, 360, 320])
+            main_splitter.setSizes([340, 760, 340])
             root_layout.addWidget(main_splitter, 1)
             root_layout.addWidget(self._build_results_panel())
             self.setCentralWidget(root)
@@ -630,6 +633,7 @@ def run() -> int:
 
         def _build_left_panel(self) -> QWidget:
             panel = QWidget()
+            panel.setObjectName("left_panel")
             layout = QVBoxLayout(panel)
             layout.addWidget(QLabel("參賽團子"))
             self.selected_summary = QLabel()
@@ -638,11 +642,15 @@ def run() -> int:
             self.participant_setup_button = QPushButton("自訂參賽團子")
             self.participant_setup_button.clicked.connect(self.open_participant_setup)
             layout.addWidget(self.participant_setup_button)
-            layout.addStretch()
+            self.events = QListWidget()
+            self.events.setObjectName("event_log")
+            layout.addWidget(QLabel("事件紀錄"))
+            layout.addWidget(self.events, 1)
             return panel
 
         def _build_center_panel(self) -> QWidget:
             panel = QWidget()
+            panel.setObjectName("center_panel")
             layout = QVBoxLayout(panel)
             self.track_scene = TrackScene(panel)
             view = QGraphicsView(self.track_scene)
@@ -682,25 +690,20 @@ def run() -> int:
 
         def _build_right_panel(self) -> QWidget:
             panel = QWidget()
+            panel.setObjectName("right_panel")
             layout = QVBoxLayout(panel)
             self.ranking = QTableWidget(0, 4)
+            self.ranking.setObjectName("ranking_table")
             self.ranking.setHorizontalHeaderLabels(["名次", "團子", "格數", "狀態"])
             self._configure_table(self.ranking)
             self.round_actions = QTableWidget(0, 4)
+            self.round_actions.setObjectName("round_action_table")
             self.round_actions.setHorizontalHeaderLabels(["順序", "團子", "骰子", "狀態"])
             self._configure_table(self.round_actions)
             layout.addWidget(QLabel("即時名次"))
             layout.addWidget(self.ranking, 1)
             layout.addWidget(QLabel("本輪行動"))
             layout.addWidget(self.round_actions, 1)
-            return panel
-
-        def _build_event_panel(self) -> QWidget:
-            panel = QWidget()
-            layout = QVBoxLayout(panel)
-            self.events = QListWidget()
-            layout.addWidget(QLabel("事件紀錄"))
-            layout.addWidget(self.events, 1)
             return panel
 
         def _configure_table(self, table: QTableWidget) -> None:
@@ -874,25 +877,85 @@ def run() -> int:
             status = "完賽" if state.finished else "賽中"
             self.ranking.setRowCount(len(state.ranking_rows))
             for row_index, row in enumerate(state.ranking_rows):
-                self.set_table_item(self.ranking, row_index, 0, str(row_index + 1))
-                self.set_table_item(self.ranking, row_index, 1, row.name, self.piece_icon(row.dango_id, state))
-                self.set_table_item(self.ranking, row_index, 2, str(row.position))
-                self.set_table_item(self.ranking, row_index, 3, status)
+                self.set_table_item(
+                    self.ranking,
+                    row_index,
+                    0,
+                    str(row_index + 1),
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                )
+                self.set_table_item(
+                    self.ranking,
+                    row_index,
+                    1,
+                    row.name,
+                    self.piece_icon(row.dango_id, state),
+                    alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                )
+                self.set_table_item(
+                    self.ranking,
+                    row_index,
+                    2,
+                    str(row.position),
+                    alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                )
+                self.set_table_item(
+                    self.ranking,
+                    row_index,
+                    3,
+                    status,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                )
 
         def render_round_action_table(self, state: RaceViewState) -> None:
             self.round_actions.setRowCount(len(state.action_rows))
             for row_index, row in enumerate(state.action_rows):
                 roll_text = "-" if row.roll is None else str(row.roll)
-                self.set_table_item(self.round_actions, row_index, 0, str(row.order))
-                self.set_table_item(self.round_actions, row_index, 1, row.name, self.piece_icon(row.dango_id, state))
-                self.set_table_item(self.round_actions, row_index, 2, roll_text)
-                self.set_table_item(self.round_actions, row_index, 3, row.status)
+                self.set_table_item(
+                    self.round_actions,
+                    row_index,
+                    0,
+                    str(row.order),
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                )
+                self.set_table_item(
+                    self.round_actions,
+                    row_index,
+                    1,
+                    row.name,
+                    self.piece_icon(row.dango_id, state),
+                    alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                )
+                self.set_table_item(
+                    self.round_actions,
+                    row_index,
+                    2,
+                    roll_text,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                )
+                self.set_table_item(
+                    self.round_actions,
+                    row_index,
+                    3,
+                    row.status,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                )
 
-        def set_table_item(self, table: QTableWidget, row: int, column: int, text: str, icon: QIcon | None = None) -> None:
+        def set_table_item(
+            self,
+            table: QTableWidget,
+            row: int,
+            column: int,
+            text: str,
+            icon: QIcon | None = None,
+            *,
+            alignment: Qt.AlignmentFlag | Qt.Alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+        ) -> None:
             item = QTableWidgetItem(text)
             if icon is not None:
                 item.setIcon(icon)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item.setTextAlignment(alignment)
             table.setItem(row, column, item)
 
         def piece_icon(self, dango_id: str, state: RaceViewState) -> QIcon:
@@ -967,6 +1030,14 @@ def run() -> int:
             elif mode == "平均名次":
                 rows = sorted(rows, key=lambda row: (row.average_rank, -row.win_rate))
             self.results.setRowCount(len(rows))
+            alignments = [
+                Qt.AlignmentFlag.AlignCenter,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            ]
             for visual_rank, row in enumerate(rows, start=1):
                 values = [
                     str(visual_rank),
@@ -977,7 +1048,13 @@ def run() -> int:
                     f"{row.weighted_score:.4f}",
                 ]
                 for column, value in enumerate(values):
-                    self.results.setItem(visual_rank - 1, column, QTableWidgetItem(value))
+                    self.set_table_item(
+                        self.results,
+                        visual_rank - 1,
+                        column,
+                        value,
+                        alignment=alignments[column],
+                    )
             self.apply_control_state()
 
         def show_worker_error(self, message: str) -> None:
@@ -1177,7 +1254,62 @@ def run() -> int:
     window = MainWindow()
     window.resize(1480, 840)
     window.show()
-    if os.environ.get("DANGOSIM_GUI_SMOKE") == "1":
+    if os.environ.get("DANGOSIM_GUI_LAYOUT_PROBE") == "1":
+        window.start_race()
+        window.step_race()
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="probe",
+                        name="測試團子",
+                        wins=12,
+                        win_rate=0.12,
+                        average_rank=2.34,
+                        weighted_score=0.5678,
+                    )
+                ],
+                seed_mode=SeedMode.FIXED,
+                seed=99,
+                completed_runs=100,
+                total_runs=100,
+                cancelled=False,
+            )
+        )
+
+        def alignment_name(table: QTableWidget, column: int) -> str:
+            item = table.item(0, column)
+            if item is None:
+                return "missing"
+            alignment = item.textAlignment()
+            if alignment & Qt.AlignmentFlag.AlignRight:
+                return "right"
+            if alignment & Qt.AlignmentFlag.AlignHCenter:
+                return "center"
+            return "left"
+
+        probe = {
+            "event_log_parent": window.events.parentWidget().objectName(),
+            "splitter_widgets": [
+                window.main_splitter.widget(index).objectName()
+                for index in range(window.main_splitter.count())
+            ],
+            "ranking_alignment": [
+                alignment_name(window.ranking, column)
+                for column in range(window.ranking.columnCount())
+            ],
+            "round_action_alignment": [
+                alignment_name(window.round_actions, column)
+                for column in range(window.round_actions.columnCount())
+            ],
+            "result_alignment": [
+                alignment_name(window.results, column)
+                for column in range(window.results.columnCount())
+            ],
+        }
+        print(json.dumps(probe, ensure_ascii=False))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_SMOKE") == "1":
         QTimer.singleShot(0, app.quit)
     return app.exec()
 
