@@ -30,6 +30,7 @@
 - `after_move`
 - `after_roll`
 - `round_start`
+- `round_end`
 - `on_device`
 
 ## Ability Action 白名單

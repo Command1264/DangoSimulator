@@ -17,7 +17,7 @@
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
 | 骰子隨機決定行動順序 | `RaceSimulator._start_round()` | 已實作，每輪洗牌一次 |
-| 每輪流程為回合開始觸發、決定行動順序、全員擲骰、擲骰後觸發、依序移動 | `RaceSimulator._start_round()` / `_apply_round_start_abilities()` / `_apply_after_roll_abilities()` / `step_next()` | 已實作 |
+| 每輪流程為回合開始觸發、決定行動順序、全員擲骰、擲骰後觸發、依序移動、回合結束觸發 | `RaceSimulator._start_round()` / `_apply_round_start_abilities()` / `_apply_after_roll_abilities()` / `step_next()` / `_apply_round_end_abilities()` | 已實作 |
 | 初始同格團子上下堆疊順序隨機 | `RaceSimulator.__init__()` / `_shuffle_stack_preserving_boss_bottom()` | 已實作；固定 seed 可重現，布大王仍維持底部 |
 | 骰子決定前進步數 | `RaceSimulator._roll_for()` / `step_dango()` | 已實作 |
 | 一般團子骰 1-3 | `RaceSimulator._roll_for()` | 已實作 |
@@ -31,7 +31,7 @@
 | 規則 | 對應元件 | 狀態 |
 | --- | --- | --- |
 | 團子每輪行動時有機率發動技能 | `AbilityConfig.probability` / builtin ability handlers | 已實作 |
-| 技能影響行動方式 | `before_move` / `after_move` / `after_roll` / `round_start` / `on_device` triggers | 已實作 |
+| 技能影響行動方式 | `before_move` / `after_move` / `after_roll` / `round_start` / `round_end` / `on_device` triggers | 已實作 |
 | 賽道存在阻礙或幫助前進的機關 | `DeviceType` / `RaceSimulator._apply_device()` | 已實作 |
 
 ## 賽道裝置
@@ -51,10 +51,10 @@
 | 行動時賽道機制對布大王生效 | `_apply_device()` | 已實作 |
 | 布大王骰 1-6 | `_roll_for()` | 已實作 |
 | 推進/阻遏對布大王效果反轉 | `_apply_device()` | 已實作 |
-| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` | 已實作；落點與時空裂隙後都會維持底部 |
-| 行動時不帶走一般團子 | `_take_moving_group()` | 已實作 |
+| 永遠處於堆疊底部 | `_place_group()` / `_open_time_rift()` / `_take_moving_group()` | 已實作；落點、時空裂隙與背負移動時都會維持底部 |
+| 行動經過或停在一般團子所在格時會背起並繼續移動 | `_take_moving_group()` / `_movement_path()` / `_collect_boss_passed_dangos()` | 已實作；新背起的團子會插在布大王與原背上團子之間，且保留原堆疊順序 |
 | 行動前不參與團子之間堆疊排序 | `_is_ranked_participant()` / `_live_rankings()` / `simulate_many()` | 已實作；參賽者模式下第 3 回合前不列入即時與完賽排名，批次統計會按後段名次補計 |
-| 整輪結束後，若布大王前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
+| 整輪結束後，若布大王所在格與前進方向到終點間已無一般團子，傳送回終點 | `should_boss_return_to_finish()` / `_finish_round()` / `_return_boss_to_finish()` | 已實作 |
 
 ## 團子技能
 
@@ -69,18 +69,18 @@
 | 千咲 | `chisaki_threshold_analysis` | `_start_round()` / `_apply_builtin_before_move()` | 已實作；使用本輪預擲骰點判定最低骰點之一 |
 | 莫寧 | `moning_precision_calculation` | `_roll_for()` | 已實作 |
 | 琳奈 | `linne_colorful` | `_apply_builtin_before_move()` / `step_dango()` | 已實作；無法移動時跳過移動、落點裝置與堆疊變動 |
-| 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` | 已實作 |
+| 愛彌斯 | `aemiss_ghost` | `_apply_after_move_abilities()` / `_midpoint_unlocked_abilities` | 已實作；越過中點後解鎖，成功傳送後才消耗 once-per-race |
 | 守岸人 | `shorekeeper_future` | `_roll_for()` | 已實作 |
 | 珂萊塔 | `colletta_double_authority` | `_apply_builtin_before_move()` | 已實作 |
-| 奧古斯塔 | `augusta_governor_authority` | `_apply_round_start_abilities()` / `_apply_before_move_abilities()` | 已實作；同格至少 2 顆才算堆疊最頂端 |
-| 尤諾 | `yuno_anchor_fate` | `_apply_after_move_abilities()` / `_move_ranked_targets_to_position()` | 已實作 |
+| 奧古斯塔 | `augusta_governor_authority` | `_apply_round_start_abilities()` / `_apply_before_move_abilities()` | 已實作；同格至少 2 顆才算堆疊最頂端，下回合最後行動時略過最頂端檢查 |
+| 尤諾 | `yuno_anchor_fate` | `_apply_after_move_abilities()` / `_move_regulars_to_position_by_rank()` / `_midpoint_unlocked_abilities` | 已實作；越過中點後解鎖，非最前且非最後時拉回所有一般團子並消耗 once-per-race |
 | 弗洛洛 | `floro_bottom_bonus` | `_start_round()` / `_is_bottom_of_stack()` / `_apply_builtin_before_move()` | 已實作；以回合開始時的底層快照判定，且同格至少 2 顆才算堆疊 |
-| 長離 | `changli_strategic_delay` | `_apply_round_start_abilities()` | 已實作；同格至少 2 顆且下方有團子才算觸發條件 |
-| 今汐 | `jinhsi_magistrate_name` | `_apply_builtin_before_move()` / `_move_to_stack_top()` | 已實作；同格至少 2 顆且頭頂有團子才算觸發條件 |
+| 長離 | `changli_strategic_delay` | `_apply_round_end_abilities()` | 已實作；回合結束時，同格至少 2 顆且下方有團子才算觸發條件 |
+| 今汐 | `jinhsi_magistrate_name` | `_apply_round_end_abilities()` / `_move_to_stack_top()` | 已實作；回合結束時，同格至少 2 顆且頭頂有團子才算觸發條件 |
 | 卡卡羅 | `calcharo_shadow_follow` | `_apply_builtin_before_move()` / `_is_last_regular()` | 已實作 |
 
 ## 預設資料
 
 `data/default_race.json` 依 `docs/core/dango-rules.md` 的「團子技能」排序列出所有一般團子，並在每個 ability 同時保存 `id` 與 `name`。
-預設賽道在第 25 格設定 `midpoint`，並與該格阻遏裝置共存。
+預設賽道在第 16 格設定 `midpoint`。
 前 6 顆一般團子預設參賽，其餘團子 `default_selected=false`，因此 GUI 會顯示卡片但不會預設參賽。

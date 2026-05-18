@@ -14,7 +14,7 @@ def test_default_race_json_is_loadable() -> None:
     config = load_race_config(default_path.read_text(encoding="utf-8"))
 
     assert config.track.length == 32
-    assert config.track.midpoint == 25
+    assert config.track.midpoint == 16
     assert len(config.dangos) >= 6
     assert any(dango.is_boss for dango in config.dangos)
 

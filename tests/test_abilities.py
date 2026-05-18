@@ -461,6 +461,24 @@ def test_load_race_config_accepts_after_roll_ability_trigger() -> None:
     assert config.dangos[0].abilities[0].trigger == "after_roll"
 
 
+def test_load_race_config_accepts_round_end_ability_trigger() -> None:
+    payload = {
+        "track": {"length": 8, "finish": 8, "devices": []},
+        "dangos": [
+            {
+                "id": "changli",
+                "name": "長離團子",
+                "start_position": 1,
+                "abilities": [{"id": "changli_strategic_delay", "name": "謀而後定", "trigger": "round_end", "actions": [{"type": "builtin"}]}],
+            }
+        ],
+    }
+
+    config = load_race_config(json.dumps(payload))
+
+    assert config.dangos[0].abilities[0].trigger == "round_end"
+
+
 def test_chisaki_gains_bonus_when_roll_is_round_minimum() -> None:
     payload = {
         "track": {"length": 20, "finish": 20, "devices": []},
@@ -550,46 +568,64 @@ def test_moning_rolls_three_two_one_cycle() -> None:
 
 
 def test_augusta_skips_current_turn_and_moves_last_next_round_when_top_of_stack() -> None:
-    payload = {
-        "track": {"length": 30, "finish": 30, "devices": []},
-        "dangos": [
-            {"id": "bottom", "name": "Bottom", "start_position": 1},
-            {
-                "id": "augusta",
-                "name": "奧古斯塔",
-                "start_position": 1,
-                "abilities": [{"id": "augusta_governor_authority", "name": "總督權柄", "trigger": "round_start", "actions": [{"type": "builtin"}]}],
-            },
-            {"id": "other", "name": "Other", "start_position": 2},
-        ],
-        "seed": 0,
-    }
-
-    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
-    first_round_results = [simulator.step_next() for _ in range(3)]
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=30, finish=30),
+            dangos=[
+                DangoConfig(id="boss", name="布大王", start_position=1, is_boss=True, ranked=False),
+                DangoConfig(
+                    id="augusta",
+                    name="奧古斯塔",
+                    start_position=1,
+                    abilities=(
+                        AbilityConfig(
+                            id="augusta_governor_authority",
+                            name="總督權柄",
+                            trigger="round_start",
+                            actions=(AbilityAction(type="builtin"),),
+                        ),
+                    ),
+                ),
+                DangoConfig(id="other", name="Other", start_position=2),
+            ],
+            seed=0,
+            first_round_order={"augusta": 1, "other": 2},
+        )
+    )
+    first_round_results = [simulator.step_next() for _ in range(2)]
     augusta_result = next(result for result in first_round_results if result.dango_id == "augusta")
 
     assert augusta_result.to_position == 1
     assert "ability:augusta_governor_authority" in augusta_result.reasons
 
-    simulator.step_next()
+    second_round_results = []
+    while True:
+        result = simulator.step_next()
+        second_round_results.append(result)
+        if result.dango_id == "augusta":
+            break
     round_events = [event for event in simulator.snapshot().event_log if event.event_type == "round_start"]
 
     assert round_events[-1].data["order"][-1] == "augusta"
+    assert second_round_results[-1].dango_id == "augusta"
+    assert second_round_results[-1].to_position != second_round_results[-1].from_position
+    assert "ability:augusta_governor_authority" not in second_round_results[-1].reasons
 
 
-def test_yuno_teleports_adjacent_ranked_regulars_to_self_after_crossing_midpoint() -> None:
+def test_yuno_pulls_all_regulars_to_self_in_rank_order_after_midpoint_when_middle_rank() -> None:
     payload = {
-        "track": {"length": 10, "finish": 10, "devices": []},
+        "track": {"length": 20, "finish": 20, "devices": [{"position": 10, "type": "midpoint"}]},
         "dangos": [
-            {"id": "ahead", "name": "Ahead", "start_position": 8},
+            {"id": "leader", "name": "Leader", "start_position": 16},
             {
                 "id": "yuno",
                 "name": "尤諾",
-                "start_position": 4,
+                "start_position": 9,
                 "abilities": [{"id": "yuno_anchor_fate", "name": "錨定命途", "trigger": "after_move", "once_per_race": True, "actions": [{"type": "builtin"}]}],
             },
-            {"id": "behind", "name": "Behind", "start_position": 2},
+            {"id": "behind", "name": "Behind", "start_position": 5},
+            {"id": "tail", "name": "Tail", "start_position": 2},
+            {"id": "boss", "name": "布大王", "start_position": 20, "is_boss": True, "ranked": False},
         ],
     }
 
@@ -597,30 +633,86 @@ def test_yuno_teleports_adjacent_ranked_regulars_to_self_after_crossing_midpoint
     simulator.step_dango("yuno", 2)
     snapshot = simulator.snapshot()
 
-    assert snapshot.positions["ahead"] == 6
-    assert snapshot.positions["behind"] == 6
-    assert snapshot.stacks[6] == ["yuno", "behind", "ahead"]
+    assert snapshot.positions["leader"] == 11
+    assert snapshot.positions["yuno"] == 11
+    assert snapshot.positions["behind"] == 11
+    assert snapshot.positions["tail"] == 11
+    assert snapshot.positions["boss"] == 20
+    assert snapshot.stacks[11] == ["tail", "behind", "yuno", "leader"]
 
 
-def test_changli_moves_last_next_round_when_stacked_above_another_dango() -> None:
+def test_aemiss_unlocks_after_midpoint_and_uses_once_when_target_later_exists() -> None:
     payload = {
-        "track": {"length": 30, "finish": 30, "devices": []},
+        "track": {"length": 20, "finish": 20, "devices": [{"position": 10, "type": "midpoint"}]},
         "dangos": [
-            {"id": "bottom", "name": "Bottom", "start_position": 1},
             {
-                "id": "changli",
-                "name": "長離",
-                "start_position": 1,
-                "abilities": [{"id": "changli_strategic_delay", "name": "謀而後定", "trigger": "round_start", "probability": 1.0, "actions": [{"type": "builtin"}]}],
+                "id": "aemiss",
+                "name": "愛彌斯",
+                "start_position": 9,
+                "abilities": [
+                    {
+                        "id": "aemiss_ghost",
+                        "name": "電子幽靈登場",
+                        "trigger": "after_move",
+                        "once_per_race": True,
+                        "actions": [{"type": "builtin"}],
+                    }
+                ],
             },
-            {"id": "other", "name": "Other", "start_position": 2},
+            {"id": "target", "name": "Target", "start_position": 5},
         ],
-        "seed": 0,
     }
 
     simulator = RaceSimulator(load_race_config(json.dumps(payload)))
-    for _ in range(3):
-        simulator.step_next()
+    simulator.step_dango("aemiss", 2)
+    simulator.step_dango("target", 8)
+    simulator.step_dango("aemiss", 1)
+    snapshot = simulator.snapshot()
+    ability_events = [event for event in snapshot.event_log if event.data.get("ability_id") == "aemiss_ghost"]
+
+    assert snapshot.positions["aemiss"] == 13
+    assert snapshot.positions["target"] == 13
+    assert snapshot.stacks[13] == ["target", "aemiss"]
+    assert len(ability_events) == 1
+
+
+def test_changli_round_end_sets_next_round_last_when_stacked_above_another_dango() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=30, finish=30),
+            dangos=[
+                DangoConfig(id="bottom", name="Bottom", start_position=4),
+                DangoConfig(
+                    id="changli",
+                    name="長離",
+                    start_position=1,
+                    abilities=(
+                        AbilityConfig(
+                            id="changli_strategic_delay",
+                            name="謀而後定",
+                            trigger="round_end",
+                            probability=1.0,
+                            actions=(AbilityAction(type="builtin"),),
+                        ),
+                    ),
+                ),
+            ],
+            seed=0,
+        )
+    )
+    simulator._turn_queue = ["changli"]
+    simulator._round_order = ["changli"]
+    simulator._round_number = 1
+    simulator._round_rolls = {"changli": 3}
+
+    simulator.step_next()
+    assert simulator.snapshot().stacks[4] == ["bottom", "changli"]
+    ability_events = [
+        event
+        for event in simulator.snapshot().event_log
+        if event.data.get("ability_id") == "changli_strategic_delay"
+    ]
+    assert len(ability_events) == 1
 
     simulator.step_next()
     round_events = [event for event in simulator.snapshot().event_log if event.event_type == "round_start"]
@@ -628,28 +720,44 @@ def test_changli_moves_last_next_round_when_stacked_above_another_dango() -> Non
     assert round_events[-1].data["order"][-1] == "changli"
 
 
-def test_jinhsi_moves_to_stack_top_before_moving() -> None:
-    payload = {
-        "track": {"length": 20, "finish": 20, "devices": []},
-        "dangos": [
-            {
-                "id": "jinhsi",
-                "name": "今汐",
-                "start_position": 1,
-                "abilities": [{"id": "jinhsi_magistrate_name", "name": "令尹之名", "trigger": "before_move", "probability": 1.0, "actions": [{"type": "builtin"}]}],
-            },
-            {"id": "top", "name": "Top", "start_position": 1},
-        ],
-    }
+def test_jinhsi_moves_to_stack_top_at_round_end() -> None:
+    simulator = RaceSimulator(
+        RaceConfig(
+            track=TrackConfig(length=20, finish=20),
+            dangos=[
+                DangoConfig(
+                    id="jinhsi",
+                    name="今汐",
+                    start_position=3,
+                    abilities=(
+                        AbilityConfig(
+                            id="jinhsi_magistrate_name",
+                            name="令尹之名",
+                            trigger="round_end",
+                            probability=1.0,
+                            actions=(AbilityAction(type="builtin"),),
+                        ),
+                    ),
+                ),
+                DangoConfig(id="top", name="Top", start_position=1),
+            ],
+        )
+    )
+    simulator._turn_queue = ["jinhsi", "top"]
+    simulator._round_order = ["jinhsi", "top"]
+    simulator._round_number = 1
+    simulator._round_rolls = {"jinhsi": 1, "top": 3}
 
-    simulator = RaceSimulator(load_race_config(json.dumps(payload)))
-    result = simulator.step_dango("jinhsi", 1)
+    result = simulator.step_next()
+    assert result.carried == ("jinhsi",)
+    assert simulator.snapshot().stacks[4] == ["jinhsi"]
+
+    simulator.step_next()
     snapshot = simulator.snapshot()
 
-    assert result.carried == ("jinhsi",)
-    assert snapshot.positions["jinhsi"] == 2
-    assert snapshot.positions["top"] == 1
-    assert snapshot.stacks[1] == ["top"]
+    assert snapshot.positions["jinhsi"] == 4
+    assert snapshot.positions["top"] == 4
+    assert snapshot.stacks[4] == ["top", "jinhsi"]
 
 
 def test_calcharo_gains_bonus_when_starting_move_in_last_place() -> None:

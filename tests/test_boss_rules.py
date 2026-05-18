@@ -27,6 +27,18 @@ def test_boss_returns_when_no_regular_is_ahead_before_finish_in_boss_direction()
     )
 
 
+def test_boss_stays_when_regular_is_on_same_position() -> None:
+    assert (
+        should_boss_return_to_finish(
+            boss_position=8,
+            finish=12,
+            length=12,
+            regular_positions=[8, 9],
+        )
+        is False
+    )
+
+
 def test_boss_does_not_return_when_already_at_finish() -> None:
     assert (
         should_boss_return_to_finish(
