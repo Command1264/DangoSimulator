@@ -130,6 +130,8 @@ def run() -> int:
     }
     DEFAULT_RESULT_SORT_COLUMN = "weighted_score"
     DEFAULT_RESULT_SORT_DIRECTION = "desc"
+    # 左右資訊欄固定等寬，避免 table/list minimum width 在視窗縮放時把賽道中心拉偏。
+    SINGLE_INFO_PANEL_WIDTH = 340
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -710,13 +712,18 @@ def run() -> int:
             main_splitter.addWidget(self._build_left_panel())
             main_splitter.addWidget(self._build_center_panel())
             main_splitter.addWidget(self._build_right_panel())
-            main_splitter.setSizes([340, 760, 340])
+            main_splitter.setChildrenCollapsible(False)
+            main_splitter.setStretchFactor(0, 0)
+            main_splitter.setStretchFactor(1, 1)
+            main_splitter.setStretchFactor(2, 0)
+            main_splitter.setSizes([SINGLE_INFO_PANEL_WIDTH, 760, SINGLE_INFO_PANEL_WIDTH])
             layout.addWidget(main_splitter, 1)
             return workspace
 
         def _build_left_panel(self) -> QWidget:
             panel = QWidget()
             panel.setObjectName("left_panel")
+            panel.setFixedWidth(SINGLE_INFO_PANEL_WIDTH)
             layout = QVBoxLayout(panel)
             self.events = QListWidget()
             self.events.setObjectName("event_log")
@@ -735,6 +742,8 @@ def run() -> int:
             layout.addWidget(self.title_label)
             self.track_scene = TrackScene(panel)
             view = QGraphicsView(self.track_scene)
+            view.setObjectName("track_view")
+            self.track_view = view
             view.setRenderHint(QPainter.RenderHint.Antialiasing)
             layout.addWidget(view, 1)
 
@@ -772,6 +781,7 @@ def run() -> int:
         def _build_right_panel(self) -> QWidget:
             panel = QWidget()
             panel.setObjectName("right_panel")
+            panel.setFixedWidth(SINGLE_INFO_PANEL_WIDTH)
             layout = QVBoxLayout(panel)
             self.ranking = QTableWidget(0, 4)
             self.ranking.setObjectName("ranking_table")
@@ -1764,11 +1774,34 @@ def run() -> int:
                 for label in widget.findChildren(QLabel)
             ]
 
+        def single_layout_metrics(width: int | None) -> dict[str, int]:
+            if width is None:
+                window.showMaximized()
+            else:
+                window.showNormal()
+                window.resize(width, 760)
+            app.processEvents()
+            workspace = window.workspace_stack.currentWidget()
+            viewport_center = window.track_view.viewport().mapTo(
+                workspace,
+                window.track_view.viewport().rect().center(),
+            )
+            return {
+                "map_center_offset": viewport_center.x() - workspace.rect().center().x(),
+                "left": window.main_splitter.widget(0).width(),
+                "right": window.main_splitter.widget(2).width(),
+            }
+
         batch_workspace = window.workspace_stack.widget(1)
         settings_workspace = window.workspace_stack.widget(2)
+        window_maximized = window.isMaximized()
+        single_metrics = [
+            single_layout_metrics(width)
+            for width in (None, 960, 1280, 1600)
+        ]
 
         probe = {
-            "window_maximized": window.isMaximized(),
+            "window_maximized": window_maximized,
             "workspace_nav_widget_class": type(window.workspace_nav).__name__,
             "workspace_shell_layout": "vertical"
             if isinstance(window.centralWidget().layout(), QVBoxLayout)
@@ -1802,6 +1835,14 @@ def run() -> int:
                 for column in range(window.results.columnCount())
             ],
             "result_visible_rows": visible_rows(window.results),
+            "single_map_center_offsets": [
+                metric["map_center_offset"]
+                for metric in single_metrics
+            ],
+            "single_info_panel_widths": [
+                {"left": metric["left"], "right": metric["right"]}
+                for metric in single_metrics
+            ],
         }
         print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)

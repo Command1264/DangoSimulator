@@ -131,6 +131,8 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
     assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]
     assert probe["result_visible_rows"] >= 7
+    assert all(abs(offset) <= 1 for offset in probe["single_map_center_offsets"])
+    assert all(widths["left"] == widths["right"] for widths in probe["single_info_panel_widths"])
 
 
 def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_path: Path) -> None:
