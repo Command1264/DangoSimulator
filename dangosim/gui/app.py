@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from dataclasses import replace
 
+from dangosim import __version__
 from dangosim.core.batch import resolve_worker_count
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
@@ -55,6 +56,7 @@ from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
 
 APP_TITLE = "DangoSimulator 小團快跑模擬器"
+APP_AUTHOR = "Command1264"
 
 
 def run() -> int:
@@ -85,8 +87,11 @@ def run() -> int:
             QProgressBar,
             QPushButton,
             QScrollArea,
+            QSizePolicy,
             QSpinBox,
             QSplitter,
+            QStackedWidget,
+            QTabBar,
             QTableWidget,
             QTableWidgetItem,
             QToolTip,
@@ -109,6 +114,29 @@ def run() -> int:
     ]
     RESULT_TABLE_MIN_VISIBLE_ROWS = 7
     RESULT_TABLE_ROW_HEIGHT = 28
+    RESULT_TABLE_HEADERS = ["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"]
+    RESULT_SORT_COLUMNS = {
+        1: ("name", "團子"),
+        2: ("wins", "勝場"),
+        3: ("win_rate", "勝率"),
+        4: ("average_rank", "平均名次"),
+        5: ("weighted_score", "綜合分數"),
+    }
+    RESULT_SORT_INDEX_BY_COLUMN = {
+        column: index
+        for index, (column, _label) in RESULT_SORT_COLUMNS.items()
+    }
+    RESULT_SORT_LABEL_BY_COLUMN = {
+        column: label
+        for _index, (column, label) in RESULT_SORT_COLUMNS.items()
+    }
+    DEFAULT_RESULT_SORT_COLUMN = "weighted_score"
+    DEFAULT_RESULT_SORT_DIRECTION = "desc"
+    # 左右資訊欄固定等寬，避免 table/list minimum width 在視窗縮放時把賽道中心拉偏。
+    SINGLE_INFO_PANEL_WIDTH = 400
+    TABLE_INDEX_COLUMN_WIDTH = 44
+    TABLE_SMALL_VALUE_COLUMN_WIDTH = 48
+    TABLE_STATUS_COLUMN_WIDTH = 58
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -375,8 +403,18 @@ def run() -> int:
             identity.addWidget(name, 0, Qt.AlignmentFlag.AlignCenter)
             layout.addLayout(identity)
             note = QLabel(state.skill_note)
+            note.setObjectName("skill_note")
             note.setAlignment(Qt.AlignmentFlag.AlignCenter)
             note.setWordWrap(True)
+            note.setStyleSheet(
+                "QLabel {"
+                "border: 1px solid #c9dce8;"
+                "border-radius: 6px;"
+                "padding: 6px;"
+                "background: rgba(255, 255, 255, 0.55);"
+                "}"
+            )
+            self.skill_note_label = note
             layout.addWidget(note)
             self.position = WheelTransparentSpinBox()
             self.position.setRange(1, self.track_length)
@@ -486,6 +524,11 @@ def run() -> int:
             title_label = QLabel("自訂參賽團子")
             title_label.setStyleSheet("font-size: 20px; font-weight: 700;")
             self.count_label = QLabel()
+            self.count_label.setWordWrap(True)
+            self.count_label.setMinimumWidth(0)
+            # Long participant names should wrap inside the current dialog width
+            # instead of increasing the dialog's horizontal size hint.
+            self.count_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             title.addWidget(title_label)
             title.addWidget(self.count_label)
             header.addLayout(title, 1)
@@ -521,6 +564,7 @@ def run() -> int:
             buttons.rejected.connect(self.reject)
             layout.addWidget(buttons)
             self._refresh_count()
+            self._equalize_skill_note_heights(layout_spec.columns)
 
         def cards(self) -> list[ParticipantCardState]:
             return [widget.state for widget in self.card_widgets]
@@ -530,6 +574,21 @@ def run() -> int:
 
         def _refresh_count(self) -> None:
             self.count_label.setText(participant_selection_summary(self.cards()))
+
+        def _equalize_skill_note_heights(self, columns: int) -> None:
+            for index in range(0, len(self.card_widgets), columns):
+                row_cards = self.card_widgets[index : index + columns]
+                for card in row_cards:
+                    card.skill_note_label.setMinimumHeight(0)
+                    card.skill_note_label.setMaximumHeight(16777215)
+                    card.skill_note_label.updateGeometry()
+                row_height = max(card.skill_note_label.sizeHint().height() for card in row_cards)
+                for card in row_cards:
+                    card.skill_note_label.setFixedHeight(row_height)
+
+        def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override name
+            super().resizeEvent(event)
+            self._equalize_skill_note_heights(participant_card_layout_spec().columns)
 
         def _accept_if_valid(self) -> None:
             if not any(card.selected and not card.is_boss for card in self.cards()):
@@ -602,37 +661,18 @@ def run() -> int:
             self.controller: GuiRaceController | None = None
             self.worker: SimulationWorker | None = None
             self.current_seed = self.base_config.seed or 0
+            self.single_current_seed = self.current_seed
+            self.single_seed_mode = SeedMode.FIXED
             self.single_race_active = False
             self.batch_running = False
+            self.batch_result_rows: list[SimulationResultRow] = []
+            self.batch_sort_column = DEFAULT_RESULT_SORT_COLUMN
+            self.batch_sort_direction = DEFAULT_RESULT_SORT_DIRECTION
 
             self.auto_timer = QTimer(self)
             self.auto_timer.timeout.connect(self.step_race)
 
-            root = QWidget()
-            root_layout = QVBoxLayout(root)
-
-            root_splitter = QSplitter(Qt.Orientation.Vertical)
-            root_splitter.setObjectName("root_splitter")
-            self.root_splitter = root_splitter
-
-            main_splitter = QSplitter(Qt.Orientation.Horizontal)
-            main_splitter.setObjectName("main_splitter")
-            self.main_splitter = main_splitter
-            main_splitter.addWidget(self._build_left_panel())
-            main_splitter.addWidget(self._build_center_panel())
-            main_splitter.addWidget(self._build_right_panel())
-            main_splitter.setSizes([340, 760, 340])
-
-            single_race_group = QGroupBox("單場模擬")
-            single_race_group.setObjectName("single_race_group")
-            single_race_layout = QVBoxLayout(single_race_group)
-            single_race_layout.addWidget(main_splitter)
-
-            root_splitter.addWidget(single_race_group)
-            root_splitter.addWidget(self._build_results_panel())
-            root_splitter.setSizes([650, 260])
-            root_layout.addWidget(root_splitter, 1)
-            self.setCentralWidget(root)
+            self.setCentralWidget(self._build_shell())
 
             self.apply_loaded_settings_to_controls()
             self.refresh_selected_summary()
@@ -641,17 +681,57 @@ def run() -> int:
             self.connect_settings_persistence()
             self.persist_user_settings()
 
+        def _build_shell(self) -> QWidget:
+            root = QWidget()
+            root.setObjectName("workspace_shell")
+            layout = QVBoxLayout(root)
+            layout.setContentsMargins(8, 8, 8, 8)
+
+            self.workspace_nav = QTabBar()
+            self.workspace_nav.setObjectName("workspace_nav")
+            self.workspace_nav.addTab("單輪模擬")
+            self.workspace_nav.addTab("多輪模擬")
+            self.workspace_nav.addTab("設定")
+            self.workspace_nav.setExpanding(False)
+            self.workspace_nav.setDocumentMode(True)
+
+            self.workspace_stack = QStackedWidget()
+            self.workspace_stack.setObjectName("workspace_stack")
+            self.workspace_stack.addWidget(self._build_single_race_workspace())
+            self.workspace_stack.addWidget(self._build_results_panel())
+            self.workspace_stack.addWidget(self._build_settings_workspace())
+
+            self.workspace_nav.currentChanged.connect(self.workspace_stack.setCurrentIndex)
+            self.workspace_nav.setCurrentIndex(0)
+
+            layout.addWidget(self.workspace_nav, 0, Qt.AlignmentFlag.AlignLeft)
+            layout.addWidget(self.workspace_stack, 1)
+            return root
+
+        def _build_single_race_workspace(self) -> QWidget:
+            workspace = QWidget()
+            workspace.setObjectName("single_race_workspace")
+            layout = QVBoxLayout(workspace)
+
+            main_splitter = QSplitter(Qt.Orientation.Horizontal)
+            main_splitter.setObjectName("main_splitter")
+            self.main_splitter = main_splitter
+            main_splitter.addWidget(self._build_left_panel())
+            main_splitter.addWidget(self._build_center_panel())
+            main_splitter.addWidget(self._build_right_panel())
+            main_splitter.setChildrenCollapsible(False)
+            main_splitter.setStretchFactor(0, 0)
+            main_splitter.setStretchFactor(1, 1)
+            main_splitter.setStretchFactor(2, 0)
+            main_splitter.setSizes([SINGLE_INFO_PANEL_WIDTH, 760, SINGLE_INFO_PANEL_WIDTH])
+            layout.addWidget(main_splitter, 1)
+            return workspace
+
         def _build_left_panel(self) -> QWidget:
             panel = QWidget()
             panel.setObjectName("left_panel")
+            panel.setFixedWidth(SINGLE_INFO_PANEL_WIDTH)
             layout = QVBoxLayout(panel)
-            layout.addWidget(QLabel("參賽團子"))
-            self.selected_summary = QLabel()
-            self.selected_summary.setWordWrap(True)
-            layout.addWidget(self.selected_summary)
-            self.participant_setup_button = QPushButton("自訂參賽團子")
-            self.participant_setup_button.clicked.connect(self.open_participant_setup)
-            layout.addWidget(self.participant_setup_button)
             self.events = QListWidget()
             self.events.setObjectName("event_log")
             layout.addWidget(QLabel("事件紀錄"))
@@ -669,6 +749,8 @@ def run() -> int:
             layout.addWidget(self.title_label)
             self.track_scene = TrackScene(panel)
             view = QGraphicsView(self.track_scene)
+            view.setObjectName("track_view")
+            self.track_view = view
             view.setRenderHint(QPainter.RenderHint.Antialiasing)
             layout.addWidget(view, 1)
 
@@ -706,60 +788,68 @@ def run() -> int:
         def _build_right_panel(self) -> QWidget:
             panel = QWidget()
             panel.setObjectName("right_panel")
+            panel.setFixedWidth(SINGLE_INFO_PANEL_WIDTH)
             layout = QVBoxLayout(panel)
             self.ranking = QTableWidget(0, 4)
             self.ranking.setObjectName("ranking_table")
             self.ranking.setHorizontalHeaderLabels(["名次", "團子", "格數", "狀態"])
-            self._configure_table(self.ranking)
+            self._configure_table(
+                self.ranking,
+                fixed_sections={
+                    0: TABLE_INDEX_COLUMN_WIDTH,
+                    2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
+                    3: TABLE_STATUS_COLUMN_WIDTH,
+                },
+            )
             self.round_actions = QTableWidget(0, 4)
             self.round_actions.setObjectName("round_action_table")
             self.round_actions.setHorizontalHeaderLabels(["順序", "團子", "骰子", "狀態"])
-            self._configure_table(self.round_actions)
+            self._configure_table(
+                self.round_actions,
+                fixed_sections={
+                    0: TABLE_INDEX_COLUMN_WIDTH,
+                    2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
+                    3: TABLE_STATUS_COLUMN_WIDTH,
+                },
+            )
             layout.addWidget(QLabel("即時名次"))
             layout.addWidget(self.ranking, 1)
             layout.addWidget(QLabel("本輪行動"))
             layout.addWidget(self.round_actions, 1)
             return panel
 
-        def _configure_table(self, table: QTableWidget) -> None:
+        def _configure_table(self, table: QTableWidget, *, fixed_sections: dict[int, int] | None = None) -> None:
             table.verticalHeader().setVisible(False)
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.setWordWrap(False)
+            table.setTextElideMode(Qt.TextElideMode.ElideRight)
+            header = table.horizontalHeader()
+            for column in range(table.columnCount()):
+                if fixed_sections and column in fixed_sections:
+                    header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+                    header.resizeSection(column, fixed_sections[column])
+                else:
+                    header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
             table.setAlternatingRowColors(True)
             table.setShowGrid(False)
 
         def _build_results_panel(self) -> QWidget:
             box = QGroupBox("多輪模擬")
-            box.setObjectName("batch_simulation_group")
+            box.setObjectName("batch_simulation_workspace")
             layout = QVBoxLayout(box)
             controls = QHBoxLayout()
             self.run_count = GroupedIntegerSpinBox()
             self.run_count.setRange(1, MAX_BATCH_RUNS)
             self.run_count.setValue(1000)
             self.run_count.setMinimumWidth(145)
-            self.seed_mode = QComboBox()
-            self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
-            self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
-            self.seed_input = QLineEdit(str(self.base_config.seed or 0))
-            self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
-            self.seed_input.setMinimumWidth(185)
             self.worker_count = QComboBox()
             self.populate_worker_options()
             self.worker_count.setToolTip("多輪模擬使用的 CPU worker 數量")
-            self.sort_mode = QComboBox()
-            self.sort_mode.addItems(["綜合分數", "勝率", "平均名次"])
             self.run_batch_button = QPushButton("執行多輪模擬")
             self.stop_batch_button = QPushButton("停止模擬")
             controls.addWidget(QLabel("場數"))
             controls.addWidget(self.run_count)
-            controls.addWidget(QLabel("Seed"))
-            controls.addWidget(self.seed_mode)
-            self.fixed_seed_label = QLabel("固定 Seed：")
-            controls.addWidget(self.fixed_seed_label)
-            controls.addWidget(self.seed_input)
             controls.addWidget(QLabel("CPU worker"))
             controls.addWidget(self.worker_count)
-            controls.addWidget(QLabel("排序"))
-            controls.addWidget(self.sort_mode)
             controls.addWidget(self.run_batch_button)
             controls.addWidget(self.stop_batch_button)
             controls.addStretch()
@@ -776,7 +866,8 @@ def run() -> int:
             layout.addLayout(progress)
 
             self.results = QTableWidget(0, 6)
-            self.results.setHorizontalHeaderLabels(["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"])
+            self.update_result_headers()
+            self.results.horizontalHeader().setSectionsClickable(True)
             self.results.verticalHeader().setDefaultSectionSize(RESULT_TABLE_ROW_HEIGHT)
             result_header_height = self.results.horizontalHeader().sizeHint().height()
             self.results.setMinimumHeight(
@@ -788,7 +879,62 @@ def run() -> int:
             layout.addWidget(self.results)
             self.run_batch_button.clicked.connect(self.run_batch)
             self.stop_batch_button.clicked.connect(self.stop_batch)
+            self.results.horizontalHeader().sectionClicked.connect(self.handle_result_header_clicked)
             return box
+
+        def _build_settings_workspace(self) -> QWidget:
+            workspace = QWidget()
+            workspace.setObjectName("settings_workspace")
+            layout = QVBoxLayout(workspace)
+
+            title = QLabel("設定")
+            title.setStyleSheet("font-size: 18px; font-weight: 700;")
+            layout.addWidget(title)
+
+            layout.addWidget(QLabel("目前參賽團子"))
+            self.settings_selected_summary = QLabel()
+            self.settings_selected_summary.setWordWrap(True)
+            layout.addWidget(self.settings_selected_summary)
+
+            self.settings_participant_setup_button = QPushButton("自訂參賽團子")
+            self.settings_participant_setup_button.clicked.connect(self.open_participant_setup)
+            layout.addWidget(self.settings_participant_setup_button)
+
+            separator = QFrame()
+            separator.setFrameShape(QFrame.Shape.HLine)
+            separator.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(separator)
+
+            layout.addWidget(QLabel("Seed 設定"))
+            seed_panel = QWidget()
+            seed_panel.setObjectName("seed_settings_panel")
+            seed_layout = QHBoxLayout(seed_panel)
+            seed_layout.setContentsMargins(0, 0, 0, 0)
+            self.seed_mode = QComboBox()
+            self.seed_mode.setObjectName("seed_mode")
+            self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
+            self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
+            self.seed_input = QLineEdit(str(self.base_config.seed or 0))
+            self.seed_input.setObjectName("seed_input")
+            self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
+            self.seed_input.setMinimumWidth(185)
+            self.fixed_seed_label = QLabel("固定 Seed：")
+            seed_layout.addWidget(QLabel("Seed 模式"))
+            seed_layout.addWidget(self.seed_mode)
+            seed_layout.addWidget(self.fixed_seed_label)
+            seed_layout.addWidget(self.seed_input)
+            seed_layout.addStretch()
+            layout.addWidget(seed_panel)
+
+            about_separator = QFrame()
+            about_separator.setFrameShape(QFrame.Shape.HLine)
+            about_separator.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(about_separator)
+
+            layout.addWidget(QLabel(f"作者：{APP_AUTHOR}"))
+            layout.addWidget(QLabel(f"版本：{__version__}"))
+            layout.addStretch()
+            return workspace
 
         def _sync_cards_from_widgets(self) -> None:
             self.cards = [widget.state for widget in self.card_widgets]
@@ -813,7 +959,9 @@ def run() -> int:
             return build_race_config_from_cards(self.base_config, self.cards)
 
         def refresh_selected_summary(self) -> None:
-            self.selected_summary.setText(participant_selection_summary(self.cards))
+            summary = participant_selection_summary(self.cards)
+            if hasattr(self, "settings_selected_summary"):
+                self.settings_selected_summary.setText(summary)
 
         def start_race(self) -> None:
             try:
@@ -836,7 +984,8 @@ def run() -> int:
             self.single_race_active = False
             self.stop_auto_timer()
             self.render_state(self.controller.view_state())
-            self.reset_batch_progress()
+            if not self.batch_running:
+                self.reset_batch_progress()
             self.apply_control_state()
 
         def configure_race_from_controls(self) -> None:
@@ -849,9 +998,11 @@ def run() -> int:
                 config_seed=self.active_config.seed,
             )
             self.current_seed = resolved_seed.seed
+            self.single_current_seed = resolved_seed.seed
+            self.single_seed_mode = mode
             if resolved_seed.mode is SeedMode.FIXED:
                 self.seed_input.setText(str(self.current_seed))
-            self.active_config = replace(self.active_config, seed=self.current_seed)
+            self.active_config = replace(self.active_config, seed=self.single_current_seed)
             self.controller = GuiRaceController(self.active_config)
 
         def step_race(self) -> None:
@@ -860,7 +1011,9 @@ def run() -> int:
             state = self.controller.step()
             self.render_state(state)
             if state.finished:
+                self.single_race_active = False
                 self.stop_auto_timer()
+                self.apply_control_state()
 
         def start_auto_if_checked(self) -> None:
             if self.auto_play.isChecked():
@@ -893,7 +1046,7 @@ def run() -> int:
                 f"{round_text}｜行動：{actor_name}　骰子："
                 f"{state.last_roll if state.last_roll is not None else '-'}"
             )
-            self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
+            self.seed_label.setText(f"目前 seed：{self.single_current_seed}（{self.single_seed_mode.value}）")
             self.render_ranking_table(state)
             self.render_round_action_table(state)
             event_scroll_bar = self.events.verticalScrollBar()
@@ -935,7 +1088,7 @@ def run() -> int:
                     row_index,
                     2,
                     str(row.position),
-                    alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
                 )
                 self.set_table_item(
                     self.ranking,
@@ -1018,9 +1171,6 @@ def run() -> int:
             return QIcon(pixmap)
 
         def run_batch(self) -> None:
-            if self.single_race_active:
-                QMessageBox.warning(self, "模擬中", "請先重置單場模擬，再執行多輪模擬。")
-                return
             try:
                 config = self.selected_config()
                 mode = self.selected_seed_mode()
@@ -1057,17 +1207,18 @@ def run() -> int:
 
         def render_results(self, result: BatchSimulationResult) -> None:
             self.batch_running = False
-            rows = result.rows
+            self.batch_result_rows = list(result.rows)
             self.current_seed = result.seed
             if result.seed_mode is SeedMode.FIXED:
                 self.seed_input.setText(str(result.seed))
-            self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
+            if not self.single_race_active:
+                self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
             self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
-            mode = self.sort_mode.currentText()
-            if mode == "勝率":
-                rows = sorted(rows, key=lambda row: (-row.win_rate, row.average_rank))
-            elif mode == "平均名次":
-                rows = sorted(rows, key=lambda row: (row.average_rank, -row.win_rate))
+            self.render_result_rows()
+            self.apply_control_state()
+
+        def render_result_rows(self) -> None:
+            rows = self.sorted_result_rows()
             self.results.setRowCount(len(rows))
             alignments = [
                 Qt.AlignmentFlag.AlignCenter,
@@ -1077,9 +1228,11 @@ def run() -> int:
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
             ]
-            for visual_rank, row in enumerate(rows, start=1):
+            for row_index, row in enumerate(rows):
+                visual_rank = row_index + 1
+                displayed_rank = visual_rank if self.batch_sort_direction == "desc" else len(rows) - row_index
                 values = [
-                    str(visual_rank),
+                    str(displayed_rank),
                     row.name,
                     str(row.wins),
                     f"{row.win_rate:.2%}",
@@ -1094,7 +1247,48 @@ def run() -> int:
                         value,
                         alignment=alignments[column],
                     )
-            self.apply_control_state()
+
+        def sorted_result_rows(self) -> list[SimulationResultRow]:
+            column = self.batch_sort_column
+            reverse = self.batch_sort_direction == "desc"
+
+            def sort_value(row: SimulationResultRow):
+                value = getattr(row, column)
+                return value.casefold() if isinstance(value, str) else value
+
+            return sorted(self.batch_result_rows, key=sort_value, reverse=reverse)
+
+        def handle_result_header_clicked(self, column_index: int) -> None:
+            if column_index not in RESULT_SORT_COLUMNS:
+                return
+            column, _label = RESULT_SORT_COLUMNS[column_index]
+            if self.batch_sort_column != column:
+                self.batch_sort_column = column
+                self.batch_sort_direction = "desc"
+            elif self.batch_sort_direction == "desc":
+                self.batch_sort_direction = "asc"
+            else:
+                self.batch_sort_column = DEFAULT_RESULT_SORT_COLUMN
+                self.batch_sort_direction = DEFAULT_RESULT_SORT_DIRECTION
+            self.update_result_headers()
+            self.render_result_rows()
+            self.persist_user_settings()
+
+        def update_result_headers(self) -> None:
+            labels = list(RESULT_TABLE_HEADERS)
+            sorted_index = RESULT_SORT_INDEX_BY_COLUMN.get(self.batch_sort_column)
+            if sorted_index is not None:
+                direction_mark = "▼" if self.batch_sort_direction == "desc" else "▲"
+                labels[sorted_index] = f"{labels[sorted_index]} {direction_mark}"
+            self.results.setHorizontalHeaderLabels(labels)
+
+        def current_result_sort_label(self) -> str:
+            label = RESULT_SORT_LABEL_BY_COLUMN.get(self.batch_sort_column, "綜合分數")
+            direction = "遞減" if self.batch_sort_direction == "desc" else "遞增"
+            return f"{label}（{direction}）"
+
+        def current_result_sort_mode(self) -> str:
+            return RESULT_SORT_LABEL_BY_COLUMN.get(self.batch_sort_column, "綜合分數")
 
         def show_worker_error(self, message: str) -> None:
             self.batch_running = False
@@ -1149,10 +1343,11 @@ def run() -> int:
             return sample_runs, parallel_estimate, worker_count
 
         def apply_control_state(self) -> None:
-            simulation_active = self.single_race_active or self.batch_running
-            self.set_participant_controls_enabled(not simulation_active)
+            # 單輪與多輪可並行；只有會改變兩者共用輸入的設定需要在任一流程執行時鎖住。
+            settings_locked = self.single_race_active or self.batch_running
+            self.set_participant_controls_enabled(not settings_locked)
 
-            self.start_button.setEnabled(not simulation_active)
+            self.start_button.setEnabled(not self.single_race_active)
             self.step_button.setEnabled(self.single_race_active)
             self.auto_play.setEnabled(
                 is_auto_play_control_enabled(
@@ -1164,22 +1359,23 @@ def run() -> int:
             self.reset_button.setEnabled(self.single_race_active)
             self.speed.setEnabled(True)
 
-            batch_controls_enabled = not self.batch_running and not self.single_race_active
+            batch_controls_enabled = not self.batch_running
+            seed_controls_enabled = not settings_locked
             self.run_count.setEnabled(batch_controls_enabled)
-            self.seed_mode.setEnabled(batch_controls_enabled)
+            self.seed_mode.setEnabled(seed_controls_enabled)
             self.seed_input.setEnabled(
                 is_seed_input_enabled(
                     seed_mode=str(self.seed_mode.currentData()),
-                    batch_controls_enabled=batch_controls_enabled,
+                    batch_controls_enabled=seed_controls_enabled,
                 )
             )
             self.worker_count.setEnabled(batch_controls_enabled)
             self.run_batch_button.setEnabled(batch_controls_enabled)
             self.stop_batch_button.setEnabled(self.batch_running)
-            self.sort_mode.setEnabled(True)
 
         def set_participant_controls_enabled(self, enabled: bool) -> None:
-            self.participant_setup_button.setEnabled(enabled)
+            if hasattr(self, "settings_participant_setup_button"):
+                self.settings_participant_setup_button.setEnabled(enabled)
 
         def format_duration(self, seconds: float) -> str:
             seconds = max(0, int(round(seconds)))
@@ -1223,7 +1419,6 @@ def run() -> int:
             self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
             self.set_combo_current_data(self.worker_count, self.user_settings.batch_simulation.workers)
-            self.set_combo_current_text(self.sort_mode, self.user_settings.batch_simulation.sort_mode)
 
         def connect_settings_persistence(self) -> None:
             self.speed.valueChanged.connect(self.persist_user_settings)
@@ -1231,7 +1426,6 @@ def run() -> int:
             self.seed_mode.currentIndexChanged.connect(self.handle_seed_mode_changed)
             self.seed_input.textChanged.connect(self.persist_user_settings)
             self.worker_count.currentIndexChanged.connect(self.persist_user_settings)
-            self.sort_mode.currentIndexChanged.connect(self.persist_user_settings)
 
         def handle_seed_mode_changed(self, *_args) -> None:
             self.apply_control_state()
@@ -1261,7 +1455,7 @@ def run() -> int:
                     runs=self.run_count.value(),
                     seed_mode=str(self.seed_mode.currentData()),
                     seed=self.seed_input.text().strip(),
-                    sort_mode=self.sort_mode.currentText(),
+                    sort_mode=self.current_result_sort_mode(),
                     workers=str(self.worker_count.currentData()),
                 ),
             )
@@ -1293,7 +1487,173 @@ def run() -> int:
     window = MainWindow()
     window.showMaximized()
     app.processEvents()
-    if os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
+    if os.environ.get("DANGOSIM_PARTICIPANT_DIALOG_LAYOUT_PROBE") == "1":
+        probe_cards = [
+            card.with_updates(selected=True)
+            if not card.is_boss
+            else card.with_updates(selected=True, boss_mode=card.boss_mode)
+            for card in window.cards
+        ]
+        dialog = ParticipantSetupDialog(
+            probe_cards,
+            track_length=window.base_config.track.length,
+            parent=window,
+        )
+        dialog.show()
+        app.processEvents()
+        layout_spec = participant_card_layout_spec()
+
+        def horizontal_policy_name(widget: QWidget) -> str:
+            return widget.sizePolicy().horizontalPolicy().name
+
+        def alignment_name(label: QLabel) -> str:
+            alignment = label.alignment()
+            if (
+                alignment & Qt.AlignmentFlag.AlignHCenter
+                and alignment & Qt.AlignmentFlag.AlignVCenter
+            ):
+                return "center"
+            return "other"
+
+        skill_note_heights_by_row = [
+            [
+                card.skill_note_label.height()
+                for card in dialog.card_widgets[index : index + layout_spec.columns]
+            ]
+            for index in range(0, len(dialog.card_widgets), layout_spec.columns)
+        ]
+        probe = {
+            "dialog_width": dialog.width(),
+            "count_label_width": dialog.count_label.width(),
+            "count_label_word_wrap": dialog.count_label.wordWrap(),
+            "count_label_horizontal_policy": horizontal_policy_name(dialog.count_label),
+            "skill_note_heights_by_row": skill_note_heights_by_row,
+            "skill_note_alignments": [
+                alignment_name(card.skill_note_label)
+                for card in dialog.card_widgets
+            ],
+        }
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_CONTROL_STATE_PROBE") == "1":
+        def control_snapshot() -> dict[str, bool]:
+            return {
+                "start": window.start_button.isEnabled(),
+                "step": window.step_button.isEnabled(),
+                "auto_play": window.auto_play.isEnabled(),
+                "pause": window.pause_button.isEnabled(),
+                "reset": window.reset_button.isEnabled(),
+                "run_batch": window.run_batch_button.isEnabled(),
+                "run_count": window.run_count.isEnabled(),
+                "worker_count": window.worker_count.isEnabled(),
+                "stop_batch": window.stop_batch_button.isEnabled(),
+                "participant_setup": window.settings_participant_setup_button.isEnabled(),
+                "seed_mode": window.seed_mode.isEnabled(),
+                "seed_input": window.seed_input.isEnabled(),
+            }
+
+        initial = control_snapshot()
+        window.start_race()
+        app.processEvents()
+        during_single = control_snapshot()
+        warning_messages: list[str] = []
+        question_messages: list[str] = []
+        original_warning = QMessageBox.warning
+        original_question = QMessageBox.question
+        original_estimate_batch = window.estimate_batch
+        QMessageBox.warning = lambda _parent, _title, message: warning_messages.append(message) or QMessageBox.StandardButton.Ok
+        QMessageBox.question = (
+            lambda _parent, _title, message, *_args: question_messages.append(message) or QMessageBox.StandardButton.No
+        )
+        window.estimate_batch = lambda _config, runs, _seed, workers: (1, 0.0, resolve_worker_count(workers, runs=runs))
+        try:
+            window.run_batch()
+        finally:
+            QMessageBox.warning = original_warning
+            QMessageBox.question = original_question
+            window.estimate_batch = original_estimate_batch
+        during_single_run_batch_attempt = {
+            "warning_messages": warning_messages,
+            "question_shown": bool(question_messages),
+            "batch_running": window.batch_running,
+        }
+        window.single_race_active = False
+        window.batch_running = True
+        window.apply_control_state()
+        during_batch_only = control_snapshot()
+        window.start_race()
+        app.processEvents()
+        both_active = control_snapshot()
+        both_active["single_race_active"] = window.single_race_active
+        both_active["batch_running"] = window.batch_running
+        seed_label_before_batch_result = window.seed_label.text()
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="probe",
+                        name="測試團子",
+                        wins=1,
+                        win_rate=1.0,
+                        average_rank=1.0,
+                        weighted_score=1.0,
+                    )
+                ],
+                seed_mode=SeedMode.SYSTEM,
+                seed=123456,
+                completed_runs=1,
+                total_runs=1,
+                cancelled=False,
+            )
+        )
+        seed_label_after_batch_result_while_single_active = window.seed_label.text()
+        window.batch_running = True
+        window.apply_control_state()
+        steps = 0
+        while window.single_race_active and steps < 10000:
+            window.step_race()
+            steps += 1
+        app.processEvents()
+        after_single_finish_with_batch = control_snapshot()
+        after_single_finish_with_batch["single_race_active"] = window.single_race_active
+        after_single_finish_with_batch["batch_running"] = window.batch_running
+        window.batch_running = False
+        window.apply_control_state()
+        after_finish = control_snapshot()
+        after_finish["single_race_active"] = window.single_race_active
+        after_finish["batch_running"] = window.batch_running
+        probe = {
+            "initial": initial,
+            "during_single": during_single,
+            "during_single_run_batch_attempt": during_single_run_batch_attempt,
+            "during_batch_only": during_batch_only,
+            "both_active": both_active,
+            "seed_label_before_batch_result": seed_label_before_batch_result,
+            "seed_label_after_batch_result_while_single_active": seed_label_after_batch_result_while_single_active,
+            "after_single_finish_with_batch": after_single_finish_with_batch,
+            "after_finish": after_finish,
+            "finished_in_steps": steps,
+        }
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_CONCURRENT_RESET_PROBE") == "1":
+        window.start_race()
+        window.batch_running = True
+        window.update_batch_progress(3, 10, 5.0)
+        window.apply_control_state()
+        window.reset_race()
+        app.processEvents()
+        probe = {
+            "single_race_active": window.single_race_active,
+            "batch_running": window.batch_running,
+            "progress_value": window.batch_progress.value(),
+            "progress_maximum": window.batch_progress.maximum(),
+            "progress_format": window.batch_progress.text(),
+            "eta": window.batch_eta.text(),
+        }
+        print(json.dumps(probe, ensure_ascii=False))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
         window.configure_race_from_controls()
         fixed_seed_after_single_race_config = window.seed_input.text()
         window.render_results(
@@ -1322,7 +1682,87 @@ def run() -> int:
             "current_seed_after_system_batch_result": window.current_seed,
             "seed_label_after_system_batch_result": window.seed_label.text(),
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_RESULT_SORT_PROBE") == "1":
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="alpha",
+                        name="Alpha",
+                        wins=10,
+                        win_rate=0.10,
+                        average_rank=3.0,
+                        weighted_score=0.90,
+                    ),
+                    SimulationResultRow(
+                        dango_id="beta",
+                        name="Beta",
+                        wins=20,
+                        win_rate=0.80,
+                        average_rank=2.0,
+                        weighted_score=0.50,
+                    ),
+                    SimulationResultRow(
+                        dango_id="gamma",
+                        name="Gamma",
+                        wins=30,
+                        win_rate=0.40,
+                        average_rank=1.0,
+                        weighted_score=0.70,
+                    ),
+                ],
+                seed_mode=SeedMode.FIXED,
+                seed=99,
+                completed_runs=100,
+                total_runs=100,
+                cancelled=False,
+            )
+        )
+
+        def result_headers() -> list[str]:
+            return [
+                window.results.horizontalHeaderItem(column).text()
+                for column in range(window.results.columnCount())
+            ]
+
+        def result_snapshot(*, include_headers: bool = False) -> dict[str, object]:
+            snapshot: dict[str, object] = {
+                "names": [
+                    window.results.item(row, 1).text()
+                    for row in range(window.results.rowCount())
+                ],
+                "ranks": [
+                    window.results.item(row, 0).text()
+                    for row in range(window.results.rowCount())
+                ],
+                "state": {
+                    "column": window.batch_sort_column,
+                    "direction": window.batch_sort_direction,
+                },
+            }
+            if include_headers:
+                snapshot["headers"] = result_headers()
+            return snapshot
+
+        default = result_snapshot(include_headers=True)
+        window.handle_result_header_clicked(3)
+        win_rate_desc = result_snapshot()
+        window.handle_result_header_clicked(3)
+        win_rate_asc = result_snapshot()
+        window.handle_result_header_clicked(3)
+        win_rate_default = result_snapshot()
+        window.handle_result_header_clicked(0)
+        after_rank_click = result_snapshot()
+        probe = {
+            "default": default,
+            "win_rate_desc": win_rate_desc,
+            "win_rate_asc": win_rate_asc,
+            "win_rate_default": win_rate_default,
+            "after_rank_click": after_rank_click,
+        }
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
         base_state = window.controller.view_state()
@@ -1362,7 +1802,7 @@ def run() -> int:
             "bottom_auto_bottom": second_maximum > 0 and second_value == second_maximum,
             "review_position_preserved": review_value == min(review_target, review_maximum),
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_LAYOUT_PROBE") == "1":
         window.start_race()
@@ -1402,24 +1842,93 @@ def run() -> int:
             row_height = table.verticalHeader().defaultSectionSize()
             return table.viewport().height() // row_height
 
-        def orientation_name(splitter: QSplitter) -> str:
-            if splitter.orientation() == Qt.Orientation.Vertical:
-                return "vertical"
-            return "horizontal"
+        def nav_items(nav: QTabBar | QListWidget) -> list[str]:
+            if isinstance(nav, QTabBar):
+                return [
+                    nav.tabText(index)
+                    for index in range(nav.count())
+                ]
+            return [
+                nav.item(index).text()
+                for index in range(nav.count())
+            ]
+
+        def stack_pages(stack: QStackedWidget) -> list[str]:
+            return [
+                stack.widget(index).objectName()
+                for index in range(stack.count())
+            ]
+
+        def ancestor_names(widget: QWidget) -> list[str]:
+            names: list[str] = []
+            parent = widget.parentWidget()
+            while parent is not None:
+                if parent.objectName():
+                    names.append(parent.objectName())
+                parent = parent.parentWidget()
+            return names
+
+        def label_texts(widget: QWidget) -> list[str]:
+            return [
+                label.text()
+                for label in widget.findChildren(QLabel)
+            ]
+
+        def section_widths(table: QTableWidget) -> list[int]:
+            header = table.horizontalHeader()
+            return [
+                header.sectionSize(column)
+                for column in range(table.columnCount())
+            ]
+
+        def single_layout_metrics(width: int | None) -> dict[str, int]:
+            if width is None:
+                window.showMaximized()
+            else:
+                window.showNormal()
+                window.resize(width, 760)
+            app.processEvents()
+            workspace = window.workspace_stack.currentWidget()
+            viewport_center = window.track_view.viewport().mapTo(
+                workspace,
+                window.track_view.viewport().rect().center(),
+            )
+            return {
+                "map_center_offset": viewport_center.x() - workspace.rect().center().x(),
+                "left": window.main_splitter.widget(0).width(),
+                "right": window.main_splitter.widget(2).width(),
+            }
+
+        batch_workspace = window.workspace_stack.widget(1)
+        settings_workspace = window.workspace_stack.widget(2)
+        window_maximized = window.isMaximized()
+        single_metrics = [
+            single_layout_metrics(width)
+            for width in (None, 960, 1280, 1600)
+        ]
 
         probe = {
-            "window_maximized": window.isMaximized(),
-            "root_splitter_orientation": orientation_name(window.root_splitter),
-            "root_splitter_widgets": [
-                window.root_splitter.widget(index).objectName()
-                for index in range(window.root_splitter.count())
-            ],
+            "window_maximized": window_maximized,
+            "workspace_nav_widget_class": type(window.workspace_nav).__name__,
+            "workspace_shell_layout": "vertical"
+            if isinstance(window.centralWidget().layout(), QVBoxLayout)
+            else "other",
+            "workspace_nav_items": nav_items(window.workspace_nav),
+            "workspace_stack_pages": stack_pages(window.workspace_stack),
+            "active_workspace": window.workspace_stack.currentWidget().objectName(),
             "title_parent": window.title_label.parentWidget().objectName(),
             "event_log_parent": window.events.parentWidget().objectName(),
             "splitter_widgets": [
                 window.main_splitter.widget(index).objectName()
                 for index in range(window.main_splitter.count())
             ],
+            "result_table_parent": window.results.parentWidget().objectName(),
+            "seed_mode_ancestors": ancestor_names(window.seed_mode),
+            "seed_input_ancestors": ancestor_names(window.seed_input),
+            "participant_setup_button_ancestors": ancestor_names(window.settings_participant_setup_button),
+            "left_panel_labels": label_texts(window.main_splitter.widget(0)),
+            "batch_workspace_labels": label_texts(batch_workspace),
+            "settings_workspace_labels": label_texts(settings_workspace),
             "ranking_alignment": [
                 alignment_name(window.ranking, column)
                 for column in range(window.ranking.columnCount())
@@ -1428,13 +1937,25 @@ def run() -> int:
                 alignment_name(window.round_actions, column)
                 for column in range(window.round_actions.columnCount())
             ],
+            "ranking_word_wrap": window.ranking.wordWrap(),
+            "round_action_word_wrap": window.round_actions.wordWrap(),
+            "ranking_section_widths": section_widths(window.ranking),
+            "round_action_section_widths": section_widths(window.round_actions),
             "result_alignment": [
                 alignment_name(window.results, column)
                 for column in range(window.results.columnCount())
             ],
             "result_visible_rows": visible_rows(window.results),
+            "single_map_center_offsets": [
+                metric["map_center_offset"]
+                for metric in single_metrics
+            ],
+            "single_info_panel_widths": [
+                {"left": metric["left"], "right": metric["right"]}
+                for metric in single_metrics
+            ],
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_SMOKE") == "1":
         QTimer.singleShot(0, app.quit)
