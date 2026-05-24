@@ -106,6 +106,8 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert result.returncode == 0, result.stderr
     probe = json.loads(result.stdout)
     assert probe["window_maximized"] is True
+    assert probe["workspace_nav_widget_class"] == "QTabBar"
+    assert probe["workspace_shell_layout"] == "vertical"
     assert probe["workspace_nav_items"] == ["單輪模擬", "多輪模擬", "設定"]
     assert probe["workspace_stack_pages"] == [
         "single_race_workspace",

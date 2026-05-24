@@ -89,6 +89,7 @@ def run() -> int:
             QSpinBox,
             QSplitter,
             QStackedWidget,
+            QTabBar,
             QTableWidget,
             QTableWidgetItem,
             QToolTip,
@@ -673,13 +674,17 @@ def run() -> int:
 
         def _build_shell(self) -> QWidget:
             root = QWidget()
-            layout = QHBoxLayout(root)
+            root.setObjectName("workspace_shell")
+            layout = QVBoxLayout(root)
             layout.setContentsMargins(8, 8, 8, 8)
 
-            self.workspace_nav = QListWidget()
+            self.workspace_nav = QTabBar()
             self.workspace_nav.setObjectName("workspace_nav")
-            self.workspace_nav.addItems(["單輪模擬", "多輪模擬", "設定"])
-            self.workspace_nav.setFixedWidth(150)
+            self.workspace_nav.addTab("單輪模擬")
+            self.workspace_nav.addTab("多輪模擬")
+            self.workspace_nav.addTab("設定")
+            self.workspace_nav.setExpanding(False)
+            self.workspace_nav.setDocumentMode(True)
 
             self.workspace_stack = QStackedWidget()
             self.workspace_stack.setObjectName("workspace_stack")
@@ -687,10 +692,10 @@ def run() -> int:
             self.workspace_stack.addWidget(self._build_results_panel())
             self.workspace_stack.addWidget(self._build_settings_workspace())
 
-            self.workspace_nav.currentRowChanged.connect(self.workspace_stack.setCurrentIndex)
-            self.workspace_nav.setCurrentRow(0)
+            self.workspace_nav.currentChanged.connect(self.workspace_stack.setCurrentIndex)
+            self.workspace_nav.setCurrentIndex(0)
 
-            layout.addWidget(self.workspace_nav)
+            layout.addWidget(self.workspace_nav, 0, Qt.AlignmentFlag.AlignLeft)
             layout.addWidget(self.workspace_stack, 1)
             return root
 
@@ -1727,10 +1732,15 @@ def run() -> int:
             row_height = table.verticalHeader().defaultSectionSize()
             return table.viewport().height() // row_height
 
-        def list_items(list_widget: QListWidget) -> list[str]:
+        def nav_items(nav: QTabBar | QListWidget) -> list[str]:
+            if isinstance(nav, QTabBar):
+                return [
+                    nav.tabText(index)
+                    for index in range(nav.count())
+                ]
             return [
-                list_widget.item(index).text()
-                for index in range(list_widget.count())
+                nav.item(index).text()
+                for index in range(nav.count())
             ]
 
         def stack_pages(stack: QStackedWidget) -> list[str]:
@@ -1759,7 +1769,11 @@ def run() -> int:
 
         probe = {
             "window_maximized": window.isMaximized(),
-            "workspace_nav_items": list_items(window.workspace_nav),
+            "workspace_nav_widget_class": type(window.workspace_nav).__name__,
+            "workspace_shell_layout": "vertical"
+            if isinstance(window.centralWidget().layout(), QVBoxLayout)
+            else "other",
+            "workspace_nav_items": nav_items(window.workspace_nav),
             "workspace_stack_pages": stack_pages(window.workspace_stack),
             "active_workspace": window.workspace_stack.currentWidget().objectName(),
             "title_parent": window.title_label.parentWidget().objectName(),
