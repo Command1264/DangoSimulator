@@ -111,6 +111,24 @@ def run() -> int:
     ]
     RESULT_TABLE_MIN_VISIBLE_ROWS = 7
     RESULT_TABLE_ROW_HEIGHT = 28
+    RESULT_TABLE_HEADERS = ["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"]
+    RESULT_SORT_COLUMNS = {
+        1: ("name", "團子"),
+        2: ("wins", "勝場"),
+        3: ("win_rate", "勝率"),
+        4: ("average_rank", "平均名次"),
+        5: ("weighted_score", "綜合分數"),
+    }
+    RESULT_SORT_INDEX_BY_COLUMN = {
+        column: index
+        for index, (column, _label) in RESULT_SORT_COLUMNS.items()
+    }
+    RESULT_SORT_LABEL_BY_COLUMN = {
+        column: label
+        for _index, (column, label) in RESULT_SORT_COLUMNS.items()
+    }
+    DEFAULT_RESULT_SORT_COLUMN = "weighted_score"
+    DEFAULT_RESULT_SORT_DIRECTION = "desc"
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -637,6 +655,9 @@ def run() -> int:
             self.current_seed = self.base_config.seed or 0
             self.single_race_active = False
             self.batch_running = False
+            self.batch_result_rows: list[SimulationResultRow] = []
+            self.batch_sort_column = DEFAULT_RESULT_SORT_COLUMN
+            self.batch_sort_direction = DEFAULT_RESULT_SORT_DIRECTION
 
             self.auto_timer = QTimer(self)
             self.auto_timer.timeout.connect(self.step_race)
@@ -779,16 +800,12 @@ def run() -> int:
             self.worker_count = QComboBox()
             self.populate_worker_options()
             self.worker_count.setToolTip("多輪模擬使用的 CPU worker 數量")
-            self.sort_mode = QComboBox()
-            self.sort_mode.addItems(["綜合分數", "勝率", "平均名次"])
             self.run_batch_button = QPushButton("執行多輪模擬")
             self.stop_batch_button = QPushButton("停止模擬")
             controls.addWidget(QLabel("場數"))
             controls.addWidget(self.run_count)
             controls.addWidget(QLabel("CPU worker"))
             controls.addWidget(self.worker_count)
-            controls.addWidget(QLabel("排序"))
-            controls.addWidget(self.sort_mode)
             controls.addWidget(self.run_batch_button)
             controls.addWidget(self.stop_batch_button)
             controls.addStretch()
@@ -805,7 +822,8 @@ def run() -> int:
             layout.addLayout(progress)
 
             self.results = QTableWidget(0, 6)
-            self.results.setHorizontalHeaderLabels(["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數"])
+            self.update_result_headers()
+            self.results.horizontalHeader().setSectionsClickable(True)
             self.results.verticalHeader().setDefaultSectionSize(RESULT_TABLE_ROW_HEIGHT)
             result_header_height = self.results.horizontalHeader().sizeHint().height()
             self.results.setMinimumHeight(
@@ -817,6 +835,7 @@ def run() -> int:
             layout.addWidget(self.results)
             self.run_batch_button.clicked.connect(self.run_batch)
             self.stop_batch_button.clicked.connect(self.stop_batch)
+            self.results.horizontalHeader().sectionClicked.connect(self.handle_result_header_clicked)
             return box
 
         def _build_settings_workspace(self) -> QWidget:
@@ -916,7 +935,7 @@ def run() -> int:
                 f"Seed 模式：{self.seed_mode.currentText()}\n"
                 f"固定 Seed：{self.seed_input.text().strip() or '-'}\n"
                 f"CPU worker：{self.worker_count.currentText()}\n"
-                f"排序：{self.sort_mode.currentText()}"
+                f"結果排序：{self.current_result_sort_label()}"
             )
 
         def start_race(self) -> None:
@@ -1163,17 +1182,17 @@ def run() -> int:
 
         def render_results(self, result: BatchSimulationResult) -> None:
             self.batch_running = False
-            rows = result.rows
+            self.batch_result_rows = list(result.rows)
             self.current_seed = result.seed
             if result.seed_mode is SeedMode.FIXED:
                 self.seed_input.setText(str(result.seed))
             self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
             self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
-            mode = self.sort_mode.currentText()
-            if mode == "勝率":
-                rows = sorted(rows, key=lambda row: (-row.win_rate, row.average_rank))
-            elif mode == "平均名次":
-                rows = sorted(rows, key=lambda row: (row.average_rank, -row.win_rate))
+            self.render_result_rows()
+            self.apply_control_state()
+
+        def render_result_rows(self) -> None:
+            rows = self.sorted_result_rows()
             self.results.setRowCount(len(rows))
             alignments = [
                 Qt.AlignmentFlag.AlignCenter,
@@ -1183,9 +1202,11 @@ def run() -> int:
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
             ]
-            for visual_rank, row in enumerate(rows, start=1):
+            for row_index, row in enumerate(rows):
+                visual_rank = row_index + 1
+                displayed_rank = visual_rank if self.batch_sort_direction == "desc" else len(rows) - row_index
                 values = [
-                    str(visual_rank),
+                    str(displayed_rank),
                     row.name,
                     str(row.wins),
                     f"{row.win_rate:.2%}",
@@ -1200,7 +1221,49 @@ def run() -> int:
                         value,
                         alignment=alignments[column],
                     )
-            self.apply_control_state()
+
+        def sorted_result_rows(self) -> list[SimulationResultRow]:
+            column = self.batch_sort_column
+            reverse = self.batch_sort_direction == "desc"
+
+            def sort_value(row: SimulationResultRow):
+                value = getattr(row, column)
+                return value.casefold() if isinstance(value, str) else value
+
+            return sorted(self.batch_result_rows, key=sort_value, reverse=reverse)
+
+        def handle_result_header_clicked(self, column_index: int) -> None:
+            if column_index not in RESULT_SORT_COLUMNS:
+                return
+            column, _label = RESULT_SORT_COLUMNS[column_index]
+            if self.batch_sort_column != column:
+                self.batch_sort_column = column
+                self.batch_sort_direction = "desc"
+            elif self.batch_sort_direction == "desc":
+                self.batch_sort_direction = "asc"
+            else:
+                self.batch_sort_column = DEFAULT_RESULT_SORT_COLUMN
+                self.batch_sort_direction = DEFAULT_RESULT_SORT_DIRECTION
+            self.update_result_headers()
+            self.render_result_rows()
+            self.persist_user_settings()
+            self.refresh_settings_summary()
+
+        def update_result_headers(self) -> None:
+            labels = list(RESULT_TABLE_HEADERS)
+            sorted_index = RESULT_SORT_INDEX_BY_COLUMN.get(self.batch_sort_column)
+            if sorted_index is not None:
+                direction_mark = "▼" if self.batch_sort_direction == "desc" else "▲"
+                labels[sorted_index] = f"{labels[sorted_index]} {direction_mark}"
+            self.results.setHorizontalHeaderLabels(labels)
+
+        def current_result_sort_label(self) -> str:
+            label = RESULT_SORT_LABEL_BY_COLUMN.get(self.batch_sort_column, "綜合分數")
+            direction = "遞減" if self.batch_sort_direction == "desc" else "遞增"
+            return f"{label}（{direction}）"
+
+        def current_result_sort_mode(self) -> str:
+            return RESULT_SORT_LABEL_BY_COLUMN.get(self.batch_sort_column, "綜合分數")
 
         def show_worker_error(self, message: str) -> None:
             self.batch_running = False
@@ -1282,7 +1345,6 @@ def run() -> int:
             self.worker_count.setEnabled(batch_controls_enabled)
             self.run_batch_button.setEnabled(batch_controls_enabled)
             self.stop_batch_button.setEnabled(self.batch_running)
-            self.sort_mode.setEnabled(True)
 
         def set_participant_controls_enabled(self, enabled: bool) -> None:
             if hasattr(self, "settings_participant_setup_button"):
@@ -1330,7 +1392,6 @@ def run() -> int:
             self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
             self.set_combo_current_data(self.worker_count, self.user_settings.batch_simulation.workers)
-            self.set_combo_current_text(self.sort_mode, self.user_settings.batch_simulation.sort_mode)
             self.refresh_settings_summary()
 
         def connect_settings_persistence(self) -> None:
@@ -1339,7 +1400,6 @@ def run() -> int:
             self.seed_mode.currentIndexChanged.connect(self.handle_seed_mode_changed)
             self.seed_input.textChanged.connect(self.persist_user_settings)
             self.worker_count.currentIndexChanged.connect(self.persist_user_settings)
-            self.sort_mode.currentIndexChanged.connect(self.persist_user_settings)
 
         def handle_seed_mode_changed(self, *_args) -> None:
             self.apply_control_state()
@@ -1369,7 +1429,7 @@ def run() -> int:
                     runs=self.run_count.value(),
                     seed_mode=str(self.seed_mode.currentData()),
                     seed=self.seed_input.text().strip(),
-                    sort_mode=self.sort_mode.currentText(),
+                    sort_mode=self.current_result_sort_mode(),
                     workers=str(self.worker_count.currentData()),
                 ),
             )
@@ -1506,6 +1566,86 @@ def run() -> int:
             "fixed_seed_after_system_batch_result": window.seed_input.text(),
             "current_seed_after_system_batch_result": window.current_seed,
             "seed_label_after_system_batch_result": window.seed_label.text(),
+        }
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_RESULT_SORT_PROBE") == "1":
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="alpha",
+                        name="Alpha",
+                        wins=10,
+                        win_rate=0.10,
+                        average_rank=3.0,
+                        weighted_score=0.90,
+                    ),
+                    SimulationResultRow(
+                        dango_id="beta",
+                        name="Beta",
+                        wins=20,
+                        win_rate=0.80,
+                        average_rank=2.0,
+                        weighted_score=0.50,
+                    ),
+                    SimulationResultRow(
+                        dango_id="gamma",
+                        name="Gamma",
+                        wins=30,
+                        win_rate=0.40,
+                        average_rank=1.0,
+                        weighted_score=0.70,
+                    ),
+                ],
+                seed_mode=SeedMode.FIXED,
+                seed=99,
+                completed_runs=100,
+                total_runs=100,
+                cancelled=False,
+            )
+        )
+
+        def result_headers() -> list[str]:
+            return [
+                window.results.horizontalHeaderItem(column).text()
+                for column in range(window.results.columnCount())
+            ]
+
+        def result_snapshot(*, include_headers: bool = False) -> dict[str, object]:
+            snapshot: dict[str, object] = {
+                "names": [
+                    window.results.item(row, 1).text()
+                    for row in range(window.results.rowCount())
+                ],
+                "ranks": [
+                    window.results.item(row, 0).text()
+                    for row in range(window.results.rowCount())
+                ],
+                "state": {
+                    "column": window.batch_sort_column,
+                    "direction": window.batch_sort_direction,
+                },
+            }
+            if include_headers:
+                snapshot["headers"] = result_headers()
+            return snapshot
+
+        default = result_snapshot(include_headers=True)
+        window.handle_result_header_clicked(3)
+        win_rate_desc = result_snapshot()
+        window.handle_result_header_clicked(3)
+        win_rate_asc = result_snapshot()
+        window.handle_result_header_clicked(3)
+        win_rate_default = result_snapshot()
+        window.handle_result_header_clicked(0)
+        after_rank_click = result_snapshot()
+        probe = {
+            "default": default,
+            "win_rate_desc": win_rate_desc,
+            "win_rate_asc": win_rate_asc,
+            "win_rate_default": win_rate_default,
+            "after_rank_click": after_rank_click,
         }
         print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)

@@ -232,6 +232,67 @@ def test_participant_dialog_wraps_summary_and_equalizes_skill_notes_by_row(tmp_p
     assert all(alignment == "center" for alignment in probe["skill_note_alignments"])
 
 
+def test_batch_results_sort_by_header_with_tri_state_and_rank_direction(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_GUI_RESULT_SORT_PROBE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {"auto_play": False},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "平均名次",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = json.loads(result.stdout)
+    assert probe["default"] == {
+        "headers": ["排名", "團子", "勝場", "勝率", "平均名次", "綜合分數 ▼"],
+        "names": ["Alpha", "Gamma", "Beta"],
+        "ranks": ["1", "2", "3"],
+        "state": {"column": "weighted_score", "direction": "desc"},
+    }
+    assert probe["win_rate_desc"] == {
+        "names": ["Beta", "Gamma", "Alpha"],
+        "ranks": ["1", "2", "3"],
+        "state": {"column": "win_rate", "direction": "desc"},
+    }
+    assert probe["win_rate_asc"] == {
+        "names": ["Alpha", "Gamma", "Beta"],
+        "ranks": ["3", "2", "1"],
+        "state": {"column": "win_rate", "direction": "asc"},
+    }
+    assert probe["win_rate_default"] == {
+        "names": ["Alpha", "Gamma", "Beta"],
+        "ranks": ["1", "2", "3"],
+        "state": {"column": "weighted_score", "direction": "desc"},
+    }
+    assert probe["after_rank_click"] == probe["win_rate_default"]
+
+
 def test_gui_event_log_auto_scrolls_only_when_already_at_bottom(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
