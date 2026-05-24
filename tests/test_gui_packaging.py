@@ -123,10 +123,69 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert "固定 Seed：" in probe["settings_workspace_labels"]
     assert "Seed" not in probe["batch_workspace_labels"]
     assert "固定 Seed：" not in probe["batch_workspace_labels"]
+    assert "settings_workspace" in probe["participant_setup_button_ancestors"]
+    assert "參賽團子" not in probe["left_panel_labels"]
     assert probe["ranking_alignment"] == ["center", "left", "right", "center"]
     assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
     assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]
     assert probe["result_visible_rows"] >= 7
+
+
+def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_GUI_CONTROL_STATE_PROBE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {"auto_play": False},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "綜合分數",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = json.loads(result.stdout)
+    assert probe["initial"] == {
+        "start": True,
+        "participant_setup": True,
+        "seed_mode": True,
+        "seed_input": True,
+    }
+    assert probe["during_single"] == {
+        "start": False,
+        "participant_setup": False,
+        "seed_mode": False,
+        "seed_input": False,
+    }
+    assert probe["after_finish"]["start"] is True
+    assert probe["after_finish"]["participant_setup"] is True
+    assert probe["after_finish"]["seed_mode"] is True
+    assert probe["after_finish"]["seed_input"] is True
+    assert probe["after_finish"]["single_race_active"] is False
+    assert probe["finished_in_steps"] > 0
 
 
 def test_gui_event_log_auto_scrolls_only_when_already_at_bottom(tmp_path: Path) -> None:

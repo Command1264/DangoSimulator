@@ -660,13 +660,6 @@ def run() -> int:
             panel = QWidget()
             panel.setObjectName("left_panel")
             layout = QVBoxLayout(panel)
-            layout.addWidget(QLabel("參賽團子"))
-            self.selected_summary = QLabel()
-            self.selected_summary.setWordWrap(True)
-            layout.addWidget(self.selected_summary)
-            self.participant_setup_button = QPushButton("自訂參賽團子")
-            self.participant_setup_button.clicked.connect(self.open_participant_setup)
-            layout.addWidget(self.participant_setup_button)
             self.events = QListWidget()
             self.events.setObjectName("event_log")
             layout.addWidget(QLabel("事件紀錄"))
@@ -874,7 +867,6 @@ def run() -> int:
 
         def refresh_selected_summary(self) -> None:
             summary = participant_selection_summary(self.cards)
-            self.selected_summary.setText(summary)
             if hasattr(self, "settings_selected_summary"):
                 self.settings_selected_summary.setText(summary)
             self.refresh_settings_summary()
@@ -940,7 +932,9 @@ def run() -> int:
             state = self.controller.step()
             self.render_state(state)
             if state.finished:
+                self.single_race_active = False
                 self.stop_auto_timer()
+                self.apply_control_state()
 
         def start_auto_if_checked(self) -> None:
             if self.auto_play.isChecked():
@@ -1259,7 +1253,6 @@ def run() -> int:
             self.sort_mode.setEnabled(True)
 
         def set_participant_controls_enabled(self, enabled: bool) -> None:
-            self.participant_setup_button.setEnabled(enabled)
             if hasattr(self, "settings_participant_setup_button"):
                 self.settings_participant_setup_button.setEnabled(enabled)
 
@@ -1377,7 +1370,35 @@ def run() -> int:
     window = MainWindow()
     window.showMaximized()
     app.processEvents()
-    if os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
+    if os.environ.get("DANGOSIM_GUI_CONTROL_STATE_PROBE") == "1":
+        def control_snapshot() -> dict[str, bool]:
+            return {
+                "start": window.start_button.isEnabled(),
+                "participant_setup": window.settings_participant_setup_button.isEnabled(),
+                "seed_mode": window.seed_mode.isEnabled(),
+                "seed_input": window.seed_input.isEnabled(),
+            }
+
+        initial = control_snapshot()
+        window.start_race()
+        app.processEvents()
+        during_single = control_snapshot()
+        steps = 0
+        while window.single_race_active and steps < 10000:
+            window.step_race()
+            steps += 1
+        app.processEvents()
+        after_finish = control_snapshot()
+        after_finish["single_race_active"] = window.single_race_active
+        probe = {
+            "initial": initial,
+            "during_single": during_single,
+            "after_finish": after_finish,
+            "finished_in_steps": steps,
+        }
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
         window.configure_race_from_controls()
         fixed_seed_after_single_race_config = window.seed_input.text()
         window.render_results(
@@ -1530,6 +1551,8 @@ def run() -> int:
             "result_table_parent": window.results.parentWidget().objectName(),
             "seed_mode_ancestors": ancestor_names(window.seed_mode),
             "seed_input_ancestors": ancestor_names(window.seed_input),
+            "participant_setup_button_ancestors": ancestor_names(window.settings_participant_setup_button),
+            "left_panel_labels": label_texts(window.main_splitter.widget(0)),
             "batch_workspace_labels": label_texts(batch_workspace),
             "settings_workspace_labels": label_texts(settings_workspace),
             "ranking_alignment": [
