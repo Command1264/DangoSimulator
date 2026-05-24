@@ -131,7 +131,10 @@ def run() -> int:
     DEFAULT_RESULT_SORT_COLUMN = "weighted_score"
     DEFAULT_RESULT_SORT_DIRECTION = "desc"
     # 左右資訊欄固定等寬，避免 table/list minimum width 在視窗縮放時把賽道中心拉偏。
-    SINGLE_INFO_PANEL_WIDTH = 340
+    SINGLE_INFO_PANEL_WIDTH = 400
+    TABLE_INDEX_COLUMN_WIDTH = 44
+    TABLE_SMALL_VALUE_COLUMN_WIDTH = 48
+    TABLE_STATUS_COLUMN_WIDTH = 58
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -788,20 +791,42 @@ def run() -> int:
             self.ranking = QTableWidget(0, 4)
             self.ranking.setObjectName("ranking_table")
             self.ranking.setHorizontalHeaderLabels(["名次", "團子", "格數", "狀態"])
-            self._configure_table(self.ranking)
+            self._configure_table(
+                self.ranking,
+                fixed_sections={
+                    0: TABLE_INDEX_COLUMN_WIDTH,
+                    2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
+                    3: TABLE_STATUS_COLUMN_WIDTH,
+                },
+            )
             self.round_actions = QTableWidget(0, 4)
             self.round_actions.setObjectName("round_action_table")
             self.round_actions.setHorizontalHeaderLabels(["順序", "團子", "骰子", "狀態"])
-            self._configure_table(self.round_actions)
+            self._configure_table(
+                self.round_actions,
+                fixed_sections={
+                    0: TABLE_INDEX_COLUMN_WIDTH,
+                    2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
+                    3: TABLE_STATUS_COLUMN_WIDTH,
+                },
+            )
             layout.addWidget(QLabel("即時名次"))
             layout.addWidget(self.ranking, 1)
             layout.addWidget(QLabel("本輪行動"))
             layout.addWidget(self.round_actions, 1)
             return panel
 
-        def _configure_table(self, table: QTableWidget) -> None:
+        def _configure_table(self, table: QTableWidget, *, fixed_sections: dict[int, int] | None = None) -> None:
             table.verticalHeader().setVisible(False)
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.setWordWrap(False)
+            table.setTextElideMode(Qt.TextElideMode.ElideRight)
+            header = table.horizontalHeader()
+            for column in range(table.columnCount()):
+                if fixed_sections and column in fixed_sections:
+                    header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+                    header.resizeSection(column, fixed_sections[column])
+                else:
+                    header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
             table.setAlternatingRowColors(True)
             table.setShowGrid(False)
 
@@ -1080,7 +1105,7 @@ def run() -> int:
                     row_index,
                     2,
                     str(row.position),
-                    alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
                 )
                 self.set_table_item(
                     self.ranking,
@@ -1869,6 +1894,13 @@ def run() -> int:
                 for label in widget.findChildren(QLabel)
             ]
 
+        def section_widths(table: QTableWidget) -> list[int]:
+            header = table.horizontalHeader()
+            return [
+                header.sectionSize(column)
+                for column in range(table.columnCount())
+            ]
+
         def single_layout_metrics(width: int | None) -> dict[str, int]:
             if width is None:
                 window.showMaximized()
@@ -1925,6 +1957,10 @@ def run() -> int:
                 alignment_name(window.round_actions, column)
                 for column in range(window.round_actions.columnCount())
             ],
+            "ranking_word_wrap": window.ranking.wordWrap(),
+            "round_action_word_wrap": window.round_actions.wordWrap(),
+            "ranking_section_widths": section_widths(window.ranking),
+            "round_action_section_widths": section_widths(window.round_actions),
             "result_alignment": [
                 alignment_name(window.results, column)
                 for column in range(window.results.columnCount())

@@ -127,12 +127,21 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert "固定 Seed：" not in probe["batch_workspace_labels"]
     assert "settings_workspace" in probe["participant_setup_button_ancestors"]
     assert "參賽團子" not in probe["left_panel_labels"]
-    assert probe["ranking_alignment"] == ["center", "left", "right", "center"]
+    assert probe["ranking_alignment"] == ["center", "left", "center", "center"]
     assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
     assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]
     assert probe["result_visible_rows"] >= 7
     assert all(abs(offset) <= 1 for offset in probe["single_map_center_offsets"])
     assert all(widths["left"] == widths["right"] for widths in probe["single_info_panel_widths"])
+    assert all(widths["left"] >= 400 and widths["right"] >= 400 for widths in probe["single_info_panel_widths"])
+    assert probe["ranking_word_wrap"] is False
+    assert probe["round_action_word_wrap"] is False
+    assert probe["ranking_section_widths"][0] <= 52
+    assert probe["ranking_section_widths"][1] >= 160
+    assert probe["ranking_section_widths"][2] <= 52
+    assert probe["round_action_section_widths"][0] <= 52
+    assert probe["round_action_section_widths"][1] >= 160
+    assert probe["round_action_section_widths"][2] <= 52
 
 
 def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_path: Path) -> None:
