@@ -85,6 +85,7 @@ def run() -> int:
             QProgressBar,
             QPushButton,
             QScrollArea,
+            QSizePolicy,
             QSpinBox,
             QSplitter,
             QStackedWidget,
@@ -376,8 +377,18 @@ def run() -> int:
             identity.addWidget(name, 0, Qt.AlignmentFlag.AlignCenter)
             layout.addLayout(identity)
             note = QLabel(state.skill_note)
+            note.setObjectName("skill_note")
             note.setAlignment(Qt.AlignmentFlag.AlignCenter)
             note.setWordWrap(True)
+            note.setStyleSheet(
+                "QLabel {"
+                "border: 1px solid #c9dce8;"
+                "border-radius: 6px;"
+                "padding: 6px;"
+                "background: rgba(255, 255, 255, 0.55);"
+                "}"
+            )
+            self.skill_note_label = note
             layout.addWidget(note)
             self.position = WheelTransparentSpinBox()
             self.position.setRange(1, self.track_length)
@@ -487,6 +498,11 @@ def run() -> int:
             title_label = QLabel("自訂參賽團子")
             title_label.setStyleSheet("font-size: 20px; font-weight: 700;")
             self.count_label = QLabel()
+            self.count_label.setWordWrap(True)
+            self.count_label.setMinimumWidth(0)
+            # Long participant names should wrap inside the current dialog width
+            # instead of increasing the dialog's horizontal size hint.
+            self.count_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             title.addWidget(title_label)
             title.addWidget(self.count_label)
             header.addLayout(title, 1)
@@ -522,6 +538,7 @@ def run() -> int:
             buttons.rejected.connect(self.reject)
             layout.addWidget(buttons)
             self._refresh_count()
+            self._equalize_skill_note_heights(layout_spec.columns)
 
         def cards(self) -> list[ParticipantCardState]:
             return [widget.state for widget in self.card_widgets]
@@ -531,6 +548,21 @@ def run() -> int:
 
         def _refresh_count(self) -> None:
             self.count_label.setText(participant_selection_summary(self.cards()))
+
+        def _equalize_skill_note_heights(self, columns: int) -> None:
+            for index in range(0, len(self.card_widgets), columns):
+                row_cards = self.card_widgets[index : index + columns]
+                for card in row_cards:
+                    card.skill_note_label.setMinimumHeight(0)
+                    card.skill_note_label.setMaximumHeight(16777215)
+                    card.skill_note_label.updateGeometry()
+                row_height = max(card.skill_note_label.sizeHint().height() for card in row_cards)
+                for card in row_cards:
+                    card.skill_note_label.setFixedHeight(row_height)
+
+        def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override name
+            super().resizeEvent(event)
+            self._equalize_skill_note_heights(participant_card_layout_spec().columns)
 
         def _accept_if_valid(self) -> None:
             if not any(card.selected and not card.is_boss for card in self.cards()):
@@ -1370,7 +1402,55 @@ def run() -> int:
     window = MainWindow()
     window.showMaximized()
     app.processEvents()
-    if os.environ.get("DANGOSIM_GUI_CONTROL_STATE_PROBE") == "1":
+    if os.environ.get("DANGOSIM_PARTICIPANT_DIALOG_LAYOUT_PROBE") == "1":
+        probe_cards = [
+            card.with_updates(selected=True)
+            if not card.is_boss
+            else card.with_updates(selected=True, boss_mode=card.boss_mode)
+            for card in window.cards
+        ]
+        dialog = ParticipantSetupDialog(
+            probe_cards,
+            track_length=window.base_config.track.length,
+            parent=window,
+        )
+        dialog.show()
+        app.processEvents()
+        layout_spec = participant_card_layout_spec()
+
+        def horizontal_policy_name(widget: QWidget) -> str:
+            return widget.sizePolicy().horizontalPolicy().name
+
+        def alignment_name(label: QLabel) -> str:
+            alignment = label.alignment()
+            if (
+                alignment & Qt.AlignmentFlag.AlignHCenter
+                and alignment & Qt.AlignmentFlag.AlignVCenter
+            ):
+                return "center"
+            return "other"
+
+        skill_note_heights_by_row = [
+            [
+                card.skill_note_label.height()
+                for card in dialog.card_widgets[index : index + layout_spec.columns]
+            ]
+            for index in range(0, len(dialog.card_widgets), layout_spec.columns)
+        ]
+        probe = {
+            "dialog_width": dialog.width(),
+            "count_label_width": dialog.count_label.width(),
+            "count_label_word_wrap": dialog.count_label.wordWrap(),
+            "count_label_horizontal_policy": horizontal_policy_name(dialog.count_label),
+            "skill_note_heights_by_row": skill_note_heights_by_row,
+            "skill_note_alignments": [
+                alignment_name(card.skill_note_label)
+                for card in dialog.card_widgets
+            ],
+        }
+        print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_CONTROL_STATE_PROBE") == "1":
         def control_snapshot() -> dict[str, bool]:
             return {
                 "start": window.start_button.isEnabled(),

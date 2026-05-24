@@ -188,6 +188,50 @@ def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_p
     assert probe["finished_in_steps"] > 0
 
 
+def test_participant_dialog_wraps_summary_and_equalizes_skill_notes_by_row(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_PARTICIPANT_DIALOG_LAYOUT_PROBE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {"auto_play": False},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "綜合分數",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = json.loads(result.stdout)
+    assert probe["count_label_word_wrap"] is True
+    assert probe["count_label_horizontal_policy"] == "Ignored"
+    assert probe["count_label_width"] <= probe["dialog_width"]
+    assert all(len(set(row_heights)) == 1 for row_heights in probe["skill_note_heights_by_row"])
+    assert all(alignment == "center" for alignment in probe["skill_note_alignments"])
+
+
 def test_gui_event_log_auto_scrolls_only_when_already_at_bottom(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
