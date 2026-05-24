@@ -6,7 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dangosim.gui.app import APP_TITLE
+from dangosim import __version__
+from dangosim.gui.app import APP_AUTHOR, APP_TITLE
 from dangosim.resources import resource_path
 
 
@@ -123,6 +124,10 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert "settings_workspace" in probe["seed_input_ancestors"]
     assert "Seed 設定" in probe["settings_workspace_labels"]
     assert "固定 Seed：" in probe["settings_workspace_labels"]
+    assert f"作者：{APP_AUTHOR}" in probe["settings_workspace_labels"]
+    assert f"版本：{__version__}" in probe["settings_workspace_labels"]
+    assert "單輪模擬設定" not in probe["settings_workspace_labels"]
+    assert "多輪模擬設定" not in probe["settings_workspace_labels"]
     assert "Seed" not in probe["batch_workspace_labels"]
     assert "固定 Seed：" not in probe["batch_workspace_labels"]
     assert "settings_workspace" in probe["participant_setup_button_ancestors"]

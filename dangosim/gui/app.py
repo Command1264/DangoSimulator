@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from dataclasses import replace
 
+from dangosim import __version__
 from dangosim.core.batch import resolve_worker_count
 from dangosim.core.config_loader import load_race_config
 from dangosim.core.models import RaceConfig
@@ -55,6 +56,7 @@ from dangosim.randomness import MAX_SEED_EXCLUSIVE, SeedMode, resolve_seed
 from dangosim.resources import resource_path
 
 APP_TITLE = "DangoSimulator 小團快跑模擬器"
+APP_AUTHOR = "Command1264"
 
 
 def run() -> int:
@@ -924,15 +926,13 @@ def run() -> int:
             seed_layout.addStretch()
             layout.addWidget(seed_panel)
 
-            layout.addWidget(QLabel("單輪模擬設定"))
-            self.settings_single_summary = QLabel()
-            self.settings_single_summary.setWordWrap(True)
-            layout.addWidget(self.settings_single_summary)
+            about_separator = QFrame()
+            about_separator.setFrameShape(QFrame.Shape.HLine)
+            about_separator.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(about_separator)
 
-            layout.addWidget(QLabel("多輪模擬設定"))
-            self.settings_batch_summary = QLabel()
-            self.settings_batch_summary.setWordWrap(True)
-            layout.addWidget(self.settings_batch_summary)
+            layout.addWidget(QLabel(f"作者：{APP_AUTHOR}"))
+            layout.addWidget(QLabel(f"版本：{__version__}"))
             layout.addStretch()
             return workspace
 
@@ -962,23 +962,6 @@ def run() -> int:
             summary = participant_selection_summary(self.cards)
             if hasattr(self, "settings_selected_summary"):
                 self.settings_selected_summary.setText(summary)
-            self.refresh_settings_summary()
-
-        def refresh_settings_summary(self) -> None:
-            if not hasattr(self, "settings_single_summary"):
-                return
-            auto_play_text = "開啟" if self.auto_play.isChecked() else "關閉"
-            self.settings_single_summary.setText(
-                f"速度：{self.speed.value()} ms\n"
-                f"自動播放：{auto_play_text}"
-            )
-            self.settings_batch_summary.setText(
-                f"場數：{self.run_count.text()}\n"
-                f"Seed 模式：{self.seed_mode.currentText()}\n"
-                f"固定 Seed：{self.seed_input.text().strip() or '-'}\n"
-                f"CPU worker：{self.worker_count.currentText()}\n"
-                f"結果排序：{self.current_result_sort_label()}"
-            )
 
         def start_race(self) -> None:
             try:
@@ -1290,7 +1273,6 @@ def run() -> int:
             self.update_result_headers()
             self.render_result_rows()
             self.persist_user_settings()
-            self.refresh_settings_summary()
 
         def update_result_headers(self) -> None:
             labels = list(RESULT_TABLE_HEADERS)
@@ -1437,7 +1419,6 @@ def run() -> int:
             self.set_combo_current_data(self.seed_mode, self.user_settings.batch_simulation.seed_mode)
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
             self.set_combo_current_data(self.worker_count, self.user_settings.batch_simulation.workers)
-            self.refresh_settings_summary()
 
         def connect_settings_persistence(self) -> None:
             self.speed.valueChanged.connect(self.persist_user_settings)
@@ -1487,7 +1468,6 @@ def run() -> int:
                 self.settings_store.save(self.user_settings)
             except OSError as exc:
                 self.statusBar().showMessage(f"設定儲存失敗：{exc}", 5000)
-            self.refresh_settings_summary()
 
         def set_combo_current_data(self, combo: QComboBox, value: str) -> None:
             index = combo.findData(value)
