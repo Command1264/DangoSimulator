@@ -203,6 +203,7 @@ Current project branch classification：
 - verification 通過後，不要等提醒，直接 commit 已完成的 slice。
 - 若本輪任務有修改使用者可見 GUI、CLI、輸出格式、錯誤處理、packaging 或 release 風險，必須檢查並更新 `docs/core/pre-release-manual-qa-checklist.md`。
 - 每次完成一個已驗證的 implementation slice 後，final response 應附上一小段建議手動測試清單。
+- 每次任務結束時，final response 必須明確報告目前所在的 git 分支。
 
 ## Task-Specific Docs
 
