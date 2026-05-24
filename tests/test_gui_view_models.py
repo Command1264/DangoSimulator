@@ -189,7 +189,8 @@ def test_participant_card_layout_spec_matches_user_facing_dialog_requirements() 
 def test_auto_play_control_is_available_before_and_after_single_race_start() -> None:
     assert is_auto_play_control_enabled(single_race_active=False, batch_running=False) is True
     assert is_auto_play_control_enabled(single_race_active=True, batch_running=False) is True
-    assert is_auto_play_control_enabled(single_race_active=False, batch_running=True) is False
+    assert is_auto_play_control_enabled(single_race_active=False, batch_running=True) is True
+    assert is_auto_play_control_enabled(single_race_active=True, batch_running=True) is True
 
 
 def test_seed_input_is_enabled_only_for_fixed_seed_when_controls_are_available() -> None:

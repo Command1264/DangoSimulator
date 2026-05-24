@@ -174,22 +174,131 @@ def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_p
     probe = json.loads(result.stdout)
     assert probe["initial"] == {
         "start": True,
+        "step": False,
+        "auto_play": True,
+        "pause": False,
+        "reset": False,
+        "run_batch": True,
+        "run_count": True,
+        "worker_count": True,
+        "stop_batch": False,
         "participant_setup": True,
         "seed_mode": True,
         "seed_input": True,
     }
     assert probe["during_single"] == {
         "start": False,
+        "step": True,
+        "auto_play": True,
+        "pause": True,
+        "reset": True,
+        "run_batch": True,
+        "run_count": True,
+        "worker_count": True,
+        "stop_batch": False,
         "participant_setup": False,
         "seed_mode": False,
         "seed_input": False,
     }
+    assert probe["during_single_run_batch_attempt"] == {
+        "warning_messages": [],
+        "question_shown": True,
+        "batch_running": False,
+    }
+    assert probe["during_batch_only"] == {
+        "start": True,
+        "step": False,
+        "auto_play": True,
+        "pause": False,
+        "reset": False,
+        "run_batch": False,
+        "run_count": False,
+        "worker_count": False,
+        "stop_batch": True,
+        "participant_setup": False,
+        "seed_mode": False,
+        "seed_input": False,
+    }
+    assert probe["both_active"] == {
+        "start": False,
+        "step": True,
+        "auto_play": True,
+        "pause": True,
+        "reset": True,
+        "run_batch": False,
+        "run_count": False,
+        "worker_count": False,
+        "stop_batch": True,
+        "participant_setup": False,
+        "seed_mode": False,
+        "seed_input": False,
+        "single_race_active": True,
+        "batch_running": True,
+    }
+    assert probe["seed_label_after_batch_result_while_single_active"] == probe["seed_label_before_batch_result"]
+    assert probe["after_single_finish_with_batch"]["start"] is True
+    assert probe["after_single_finish_with_batch"]["run_batch"] is False
+    assert probe["after_single_finish_with_batch"]["stop_batch"] is True
+    assert probe["after_single_finish_with_batch"]["participant_setup"] is False
+    assert probe["after_single_finish_with_batch"]["seed_mode"] is False
+    assert probe["after_single_finish_with_batch"]["seed_input"] is False
+    assert probe["after_single_finish_with_batch"]["single_race_active"] is False
+    assert probe["after_single_finish_with_batch"]["batch_running"] is True
     assert probe["after_finish"]["start"] is True
+    assert probe["after_finish"]["run_batch"] is True
     assert probe["after_finish"]["participant_setup"] is True
     assert probe["after_finish"]["seed_mode"] is True
     assert probe["after_finish"]["seed_input"] is True
     assert probe["after_finish"]["single_race_active"] is False
+    assert probe["after_finish"]["batch_running"] is False
     assert probe["finished_in_steps"] > 0
+
+
+def test_single_reset_does_not_clear_running_batch_progress(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["DANGOSIM_GUI_CONCURRENT_RESET_PROBE"] = "1"
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "participants": {},
+                "single_race": {"auto_play": False},
+                "batch_simulation": {
+                    "runs": 1000,
+                    "seed_mode": "fixed",
+                    "seed": "99",
+                    "sort_mode": "綜合分數",
+                    "workers": "1",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    env["DANGOSIM_SETTINGS_PATH"] = str(settings_path)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "dangosim.gui.app"],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = json.loads(result.stdout)
+    assert probe == {
+        "single_race_active": False,
+        "batch_running": True,
+        "progress_value": 3,
+        "progress_maximum": 10,
+        "progress_format": "3 / 10",
+        "eta": "ETA：5 秒",
+    }
 
 
 def test_participant_dialog_wraps_summary_and_equalizes_skill_notes_by_row(tmp_path: Path) -> None:

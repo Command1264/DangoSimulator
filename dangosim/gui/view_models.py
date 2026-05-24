@@ -191,7 +191,7 @@ def format_event_log_message(message: str) -> str:
 
 
 def is_auto_play_control_enabled(*, single_race_active: bool, batch_running: bool) -> bool:
-    return not batch_running
+    return True
 
 
 def is_seed_input_enabled(*, seed_mode: str, batch_controls_enabled: bool) -> bool:

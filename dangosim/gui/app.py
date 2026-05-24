@@ -656,6 +656,8 @@ def run() -> int:
             self.controller: GuiRaceController | None = None
             self.worker: SimulationWorker | None = None
             self.current_seed = self.base_config.seed or 0
+            self.single_current_seed = self.current_seed
+            self.single_seed_mode = SeedMode.FIXED
             self.single_race_active = False
             self.batch_running = False
             self.batch_result_rows: list[SimulationResultRow] = []
@@ -974,7 +976,8 @@ def run() -> int:
             self.single_race_active = False
             self.stop_auto_timer()
             self.render_state(self.controller.view_state())
-            self.reset_batch_progress()
+            if not self.batch_running:
+                self.reset_batch_progress()
             self.apply_control_state()
 
         def configure_race_from_controls(self) -> None:
@@ -987,9 +990,11 @@ def run() -> int:
                 config_seed=self.active_config.seed,
             )
             self.current_seed = resolved_seed.seed
+            self.single_current_seed = resolved_seed.seed
+            self.single_seed_mode = mode
             if resolved_seed.mode is SeedMode.FIXED:
                 self.seed_input.setText(str(self.current_seed))
-            self.active_config = replace(self.active_config, seed=self.current_seed)
+            self.active_config = replace(self.active_config, seed=self.single_current_seed)
             self.controller = GuiRaceController(self.active_config)
 
         def step_race(self) -> None:
@@ -1033,7 +1038,7 @@ def run() -> int:
                 f"{round_text}｜行動：{actor_name}　骰子："
                 f"{state.last_roll if state.last_roll is not None else '-'}"
             )
-            self.seed_label.setText(f"目前 seed：{self.current_seed}（{self.selected_seed_mode().value}）")
+            self.seed_label.setText(f"目前 seed：{self.single_current_seed}（{self.single_seed_mode.value}）")
             self.render_ranking_table(state)
             self.render_round_action_table(state)
             event_scroll_bar = self.events.verticalScrollBar()
@@ -1158,9 +1163,6 @@ def run() -> int:
             return QIcon(pixmap)
 
         def run_batch(self) -> None:
-            if self.single_race_active:
-                QMessageBox.warning(self, "模擬中", "請先重置單場模擬，再執行多輪模擬。")
-                return
             try:
                 config = self.selected_config()
                 mode = self.selected_seed_mode()
@@ -1201,7 +1203,8 @@ def run() -> int:
             self.current_seed = result.seed
             if result.seed_mode is SeedMode.FIXED:
                 self.seed_input.setText(str(result.seed))
-            self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
+            if not self.single_race_active:
+                self.seed_label.setText(f"目前 seed：{self.current_seed}（{result.seed_mode.value}）")
             self.update_batch_progress(result.completed_runs, result.total_runs, 0.0)
             self.render_result_rows()
             self.apply_control_state()
@@ -1333,10 +1336,11 @@ def run() -> int:
             return sample_runs, parallel_estimate, worker_count
 
         def apply_control_state(self) -> None:
-            simulation_active = self.single_race_active or self.batch_running
-            self.set_participant_controls_enabled(not simulation_active)
+            # 單輪與多輪可並行；只有會改變兩者共用輸入的設定需要在任一流程執行時鎖住。
+            settings_locked = self.single_race_active or self.batch_running
+            self.set_participant_controls_enabled(not settings_locked)
 
-            self.start_button.setEnabled(not simulation_active)
+            self.start_button.setEnabled(not self.single_race_active)
             self.step_button.setEnabled(self.single_race_active)
             self.auto_play.setEnabled(
                 is_auto_play_control_enabled(
@@ -1348,13 +1352,14 @@ def run() -> int:
             self.reset_button.setEnabled(self.single_race_active)
             self.speed.setEnabled(True)
 
-            batch_controls_enabled = not self.batch_running and not self.single_race_active
+            batch_controls_enabled = not self.batch_running
+            seed_controls_enabled = not settings_locked
             self.run_count.setEnabled(batch_controls_enabled)
-            self.seed_mode.setEnabled(batch_controls_enabled)
+            self.seed_mode.setEnabled(seed_controls_enabled)
             self.seed_input.setEnabled(
                 is_seed_input_enabled(
                     seed_mode=str(self.seed_mode.currentData()),
-                    batch_controls_enabled=batch_controls_enabled,
+                    batch_controls_enabled=seed_controls_enabled,
                 )
             )
             self.worker_count.setEnabled(batch_controls_enabled)
@@ -1529,6 +1534,14 @@ def run() -> int:
         def control_snapshot() -> dict[str, bool]:
             return {
                 "start": window.start_button.isEnabled(),
+                "step": window.step_button.isEnabled(),
+                "auto_play": window.auto_play.isEnabled(),
+                "pause": window.pause_button.isEnabled(),
+                "reset": window.reset_button.isEnabled(),
+                "run_batch": window.run_batch_button.isEnabled(),
+                "run_count": window.run_count.isEnabled(),
+                "worker_count": window.worker_count.isEnabled(),
+                "stop_batch": window.stop_batch_button.isEnabled(),
                 "participant_setup": window.settings_participant_setup_button.isEnabled(),
                 "seed_mode": window.seed_mode.isEnabled(),
                 "seed_input": window.seed_input.isEnabled(),
@@ -1538,20 +1551,102 @@ def run() -> int:
         window.start_race()
         app.processEvents()
         during_single = control_snapshot()
+        warning_messages: list[str] = []
+        question_messages: list[str] = []
+        original_warning = QMessageBox.warning
+        original_question = QMessageBox.question
+        original_estimate_batch = window.estimate_batch
+        QMessageBox.warning = lambda _parent, _title, message: warning_messages.append(message) or QMessageBox.StandardButton.Ok
+        QMessageBox.question = (
+            lambda _parent, _title, message, *_args: question_messages.append(message) or QMessageBox.StandardButton.No
+        )
+        window.estimate_batch = lambda _config, runs, _seed, workers: (1, 0.0, resolve_worker_count(workers, runs=runs))
+        try:
+            window.run_batch()
+        finally:
+            QMessageBox.warning = original_warning
+            QMessageBox.question = original_question
+            window.estimate_batch = original_estimate_batch
+        during_single_run_batch_attempt = {
+            "warning_messages": warning_messages,
+            "question_shown": bool(question_messages),
+            "batch_running": window.batch_running,
+        }
+        window.single_race_active = False
+        window.batch_running = True
+        window.apply_control_state()
+        during_batch_only = control_snapshot()
+        window.start_race()
+        app.processEvents()
+        both_active = control_snapshot()
+        both_active["single_race_active"] = window.single_race_active
+        both_active["batch_running"] = window.batch_running
+        seed_label_before_batch_result = window.seed_label.text()
+        window.render_results(
+            BatchSimulationResult(
+                rows=[
+                    SimulationResultRow(
+                        dango_id="probe",
+                        name="測試團子",
+                        wins=1,
+                        win_rate=1.0,
+                        average_rank=1.0,
+                        weighted_score=1.0,
+                    )
+                ],
+                seed_mode=SeedMode.SYSTEM,
+                seed=123456,
+                completed_runs=1,
+                total_runs=1,
+                cancelled=False,
+            )
+        )
+        seed_label_after_batch_result_while_single_active = window.seed_label.text()
+        window.batch_running = True
+        window.apply_control_state()
         steps = 0
         while window.single_race_active and steps < 10000:
             window.step_race()
             steps += 1
         app.processEvents()
+        after_single_finish_with_batch = control_snapshot()
+        after_single_finish_with_batch["single_race_active"] = window.single_race_active
+        after_single_finish_with_batch["batch_running"] = window.batch_running
+        window.batch_running = False
+        window.apply_control_state()
         after_finish = control_snapshot()
         after_finish["single_race_active"] = window.single_race_active
+        after_finish["batch_running"] = window.batch_running
         probe = {
             "initial": initial,
             "during_single": during_single,
+            "during_single_run_batch_attempt": during_single_run_batch_attempt,
+            "during_batch_only": during_batch_only,
+            "both_active": both_active,
+            "seed_label_before_batch_result": seed_label_before_batch_result,
+            "seed_label_after_batch_result_while_single_active": seed_label_after_batch_result_while_single_active,
+            "after_single_finish_with_batch": after_single_finish_with_batch,
             "after_finish": after_finish,
             "finished_in_steps": steps,
         }
         print(json.dumps(probe))
+        QTimer.singleShot(0, app.quit)
+    elif os.environ.get("DANGOSIM_GUI_CONCURRENT_RESET_PROBE") == "1":
+        window.start_race()
+        window.batch_running = True
+        window.update_batch_progress(3, 10, 5.0)
+        window.apply_control_state()
+        window.reset_race()
+        app.processEvents()
+        probe = {
+            "single_race_active": window.single_race_active,
+            "batch_running": window.batch_running,
+            "progress_value": window.batch_progress.value(),
+            "progress_maximum": window.batch_progress.maximum(),
+            "progress_format": window.batch_progress.text(),
+            "eta": window.batch_eta.text(),
+        }
+        print(json.dumps(probe, ensure_ascii=False))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_SYSTEM_SEED_PROBE") == "1":
         window.configure_race_from_controls()
