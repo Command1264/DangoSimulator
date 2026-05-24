@@ -87,6 +87,7 @@ def run() -> int:
             QScrollArea,
             QSpinBox,
             QSplitter,
+            QStackedWidget,
             QTableWidget,
             QTableWidgetItem,
             QToolTip,
@@ -608,12 +609,42 @@ def run() -> int:
             self.auto_timer = QTimer(self)
             self.auto_timer.timeout.connect(self.step_race)
 
-            root = QWidget()
-            root_layout = QVBoxLayout(root)
+            self.setCentralWidget(self._build_shell())
 
-            root_splitter = QSplitter(Qt.Orientation.Vertical)
-            root_splitter.setObjectName("root_splitter")
-            self.root_splitter = root_splitter
+            self.apply_loaded_settings_to_controls()
+            self.refresh_selected_summary()
+            self.reset_race()
+            self.loading_settings = False
+            self.connect_settings_persistence()
+            self.persist_user_settings()
+
+        def _build_shell(self) -> QWidget:
+            root = QWidget()
+            layout = QHBoxLayout(root)
+            layout.setContentsMargins(8, 8, 8, 8)
+
+            self.workspace_nav = QListWidget()
+            self.workspace_nav.setObjectName("workspace_nav")
+            self.workspace_nav.addItems(["單輪模擬", "多輪模擬", "設定"])
+            self.workspace_nav.setFixedWidth(150)
+
+            self.workspace_stack = QStackedWidget()
+            self.workspace_stack.setObjectName("workspace_stack")
+            self.workspace_stack.addWidget(self._build_single_race_workspace())
+            self.workspace_stack.addWidget(self._build_results_panel())
+            self.workspace_stack.addWidget(self._build_settings_workspace())
+
+            self.workspace_nav.currentRowChanged.connect(self.workspace_stack.setCurrentIndex)
+            self.workspace_nav.setCurrentRow(0)
+
+            layout.addWidget(self.workspace_nav)
+            layout.addWidget(self.workspace_stack, 1)
+            return root
+
+        def _build_single_race_workspace(self) -> QWidget:
+            workspace = QWidget()
+            workspace.setObjectName("single_race_workspace")
+            layout = QVBoxLayout(workspace)
 
             main_splitter = QSplitter(Qt.Orientation.Horizontal)
             main_splitter.setObjectName("main_splitter")
@@ -622,24 +653,8 @@ def run() -> int:
             main_splitter.addWidget(self._build_center_panel())
             main_splitter.addWidget(self._build_right_panel())
             main_splitter.setSizes([340, 760, 340])
-
-            single_race_group = QGroupBox("單場模擬")
-            single_race_group.setObjectName("single_race_group")
-            single_race_layout = QVBoxLayout(single_race_group)
-            single_race_layout.addWidget(main_splitter)
-
-            root_splitter.addWidget(single_race_group)
-            root_splitter.addWidget(self._build_results_panel())
-            root_splitter.setSizes([650, 260])
-            root_layout.addWidget(root_splitter, 1)
-            self.setCentralWidget(root)
-
-            self.apply_loaded_settings_to_controls()
-            self.refresh_selected_summary()
-            self.reset_race()
-            self.loading_settings = False
-            self.connect_settings_persistence()
-            self.persist_user_settings()
+            layout.addWidget(main_splitter, 1)
+            return workspace
 
         def _build_left_panel(self) -> QWidget:
             panel = QWidget()
@@ -729,7 +744,7 @@ def run() -> int:
 
         def _build_results_panel(self) -> QWidget:
             box = QGroupBox("多輪模擬")
-            box.setObjectName("batch_simulation_group")
+            box.setObjectName("batch_simulation_workspace")
             layout = QVBoxLayout(box)
             controls = QHBoxLayout()
             self.run_count = GroupedIntegerSpinBox()
@@ -790,6 +805,41 @@ def run() -> int:
             self.stop_batch_button.clicked.connect(self.stop_batch)
             return box
 
+        def _build_settings_workspace(self) -> QWidget:
+            workspace = QWidget()
+            workspace.setObjectName("settings_workspace")
+            layout = QVBoxLayout(workspace)
+
+            title = QLabel("設定")
+            title.setStyleSheet("font-size: 18px; font-weight: 700;")
+            layout.addWidget(title)
+
+            layout.addWidget(QLabel("目前參賽團子"))
+            self.settings_selected_summary = QLabel()
+            self.settings_selected_summary.setWordWrap(True)
+            layout.addWidget(self.settings_selected_summary)
+
+            self.settings_participant_setup_button = QPushButton("自訂參賽團子")
+            self.settings_participant_setup_button.clicked.connect(self.open_participant_setup)
+            layout.addWidget(self.settings_participant_setup_button)
+
+            separator = QFrame()
+            separator.setFrameShape(QFrame.Shape.HLine)
+            separator.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(separator)
+
+            layout.addWidget(QLabel("單輪模擬設定"))
+            self.settings_single_summary = QLabel()
+            self.settings_single_summary.setWordWrap(True)
+            layout.addWidget(self.settings_single_summary)
+
+            layout.addWidget(QLabel("多輪模擬設定"))
+            self.settings_batch_summary = QLabel()
+            self.settings_batch_summary.setWordWrap(True)
+            layout.addWidget(self.settings_batch_summary)
+            layout.addStretch()
+            return workspace
+
         def _sync_cards_from_widgets(self) -> None:
             self.cards = [widget.state for widget in self.card_widgets]
             self.refresh_selected_summary()
@@ -813,7 +863,27 @@ def run() -> int:
             return build_race_config_from_cards(self.base_config, self.cards)
 
         def refresh_selected_summary(self) -> None:
-            self.selected_summary.setText(participant_selection_summary(self.cards))
+            summary = participant_selection_summary(self.cards)
+            self.selected_summary.setText(summary)
+            if hasattr(self, "settings_selected_summary"):
+                self.settings_selected_summary.setText(summary)
+            self.refresh_settings_summary()
+
+        def refresh_settings_summary(self) -> None:
+            if not hasattr(self, "settings_single_summary"):
+                return
+            auto_play_text = "開啟" if self.auto_play.isChecked() else "關閉"
+            self.settings_single_summary.setText(
+                f"速度：{self.speed.value()} ms\n"
+                f"自動播放：{auto_play_text}"
+            )
+            self.settings_batch_summary.setText(
+                f"場數：{self.run_count.text()}\n"
+                f"Seed 模式：{self.seed_mode.currentText()}\n"
+                f"固定 Seed：{self.seed_input.text().strip() or '-'}\n"
+                f"CPU worker：{self.worker_count.currentText()}\n"
+                f"排序：{self.sort_mode.currentText()}"
+            )
 
         def start_race(self) -> None:
             try:
@@ -1180,6 +1250,8 @@ def run() -> int:
 
         def set_participant_controls_enabled(self, enabled: bool) -> None:
             self.participant_setup_button.setEnabled(enabled)
+            if hasattr(self, "settings_participant_setup_button"):
+                self.settings_participant_setup_button.setEnabled(enabled)
 
         def format_duration(self, seconds: float) -> str:
             seconds = max(0, int(round(seconds)))
@@ -1224,6 +1296,7 @@ def run() -> int:
             self.seed_input.setText(self.user_settings.batch_simulation.seed)
             self.set_combo_current_data(self.worker_count, self.user_settings.batch_simulation.workers)
             self.set_combo_current_text(self.sort_mode, self.user_settings.batch_simulation.sort_mode)
+            self.refresh_settings_summary()
 
         def connect_settings_persistence(self) -> None:
             self.speed.valueChanged.connect(self.persist_user_settings)
@@ -1274,6 +1347,7 @@ def run() -> int:
                 self.settings_store.save(self.user_settings)
             except OSError as exc:
                 self.statusBar().showMessage(f"設定儲存失敗：{exc}", 5000)
+            self.refresh_settings_summary()
 
         def set_combo_current_data(self, combo: QComboBox, value: str) -> None:
             index = combo.findData(value)
@@ -1402,24 +1476,30 @@ def run() -> int:
             row_height = table.verticalHeader().defaultSectionSize()
             return table.viewport().height() // row_height
 
-        def orientation_name(splitter: QSplitter) -> str:
-            if splitter.orientation() == Qt.Orientation.Vertical:
-                return "vertical"
-            return "horizontal"
+        def list_items(list_widget: QListWidget) -> list[str]:
+            return [
+                list_widget.item(index).text()
+                for index in range(list_widget.count())
+            ]
+
+        def stack_pages(stack: QStackedWidget) -> list[str]:
+            return [
+                stack.widget(index).objectName()
+                for index in range(stack.count())
+            ]
 
         probe = {
             "window_maximized": window.isMaximized(),
-            "root_splitter_orientation": orientation_name(window.root_splitter),
-            "root_splitter_widgets": [
-                window.root_splitter.widget(index).objectName()
-                for index in range(window.root_splitter.count())
-            ],
+            "workspace_nav_items": list_items(window.workspace_nav),
+            "workspace_stack_pages": stack_pages(window.workspace_stack),
+            "active_workspace": window.workspace_stack.currentWidget().objectName(),
             "title_parent": window.title_label.parentWidget().objectName(),
             "event_log_parent": window.events.parentWidget().objectName(),
             "splitter_widgets": [
                 window.main_splitter.widget(index).objectName()
                 for index in range(window.main_splitter.count())
             ],
+            "result_table_parent": window.results.parentWidget().objectName(),
             "ranking_alignment": [
                 alignment_name(window.ranking, column)
                 for column in range(window.ranking.columnCount())
