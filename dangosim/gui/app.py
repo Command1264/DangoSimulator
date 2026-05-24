@@ -66,7 +66,6 @@ def run() -> int:
         from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap, QValidator
         from PySide6.QtWidgets import (
             QApplication,
-            QAbstractItemView,
             QCheckBox,
             QComboBox,
             QDialog,
@@ -92,9 +91,6 @@ def run() -> int:
             QSpinBox,
             QSplitter,
             QStackedWidget,
-            QStyle,
-            QStyledItemDelegate,
-            QStyleOptionViewItem,
             QTabBar,
             QTableWidget,
             QTableWidgetItem,
@@ -141,23 +137,6 @@ def run() -> int:
     TABLE_INDEX_COLUMN_WIDTH = 44
     TABLE_SMALL_VALUE_COLUMN_WIDTH = 48
     TABLE_STATUS_COLUMN_WIDTH = 58
-
-    class LeadingSelectionDelegate(QStyledItemDelegate):
-        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:  # type: ignore[no-untyped-def]
-            option_copy = QStyleOptionViewItem(option)
-            selected = bool(option_copy.state & QStyle.StateFlag.State_Selected)
-            if selected:
-                option_copy.state &= ~QStyle.StateFlag.State_Selected
-            super().paint(painter, option_copy, index)
-            if not selected or index.column() != 0:
-                return
-            painter.save()
-            painter.setPen(QPen(QColor("#2878d8"), 3))
-            center_y = option.rect.center().y()
-            half_height = max(6, option.rect.height() // 4)
-            x = option.rect.left() + 3
-            painter.drawLine(x, center_y - half_height, x, center_y + half_height)
-            painter.restore()
 
     class GroupedIntegerSpinBox(QSpinBox):
         def __init__(self) -> None:
@@ -755,7 +734,6 @@ def run() -> int:
             layout = QVBoxLayout(panel)
             self.events = QListWidget()
             self.events.setObjectName("event_log")
-            self.events.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
             layout.addWidget(QLabel("事件紀錄"))
             layout.addWidget(self.events, 1)
             return panel
@@ -822,7 +800,6 @@ def run() -> int:
                     2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
                     3: TABLE_STATUS_COLUMN_WIDTH,
                 },
-                leading_selection=True,
             )
             self.round_actions = QTableWidget(0, 4)
             self.round_actions.setObjectName("round_action_table")
@@ -834,7 +811,6 @@ def run() -> int:
                     2: TABLE_SMALL_VALUE_COLUMN_WIDTH,
                     3: TABLE_STATUS_COLUMN_WIDTH,
                 },
-                leading_selection=True,
             )
             layout.addWidget(QLabel("即時名次"))
             layout.addWidget(self.ranking, 1)
@@ -842,21 +818,10 @@ def run() -> int:
             layout.addWidget(self.round_actions, 1)
             return panel
 
-        def _configure_table(
-            self,
-            table: QTableWidget,
-            *,
-            fixed_sections: dict[int, int] | None = None,
-            leading_selection: bool = False,
-        ) -> None:
-            table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-            table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        def _configure_table(self, table: QTableWidget, *, fixed_sections: dict[int, int] | None = None) -> None:
             table.verticalHeader().setVisible(False)
             table.setWordWrap(False)
             table.setTextElideMode(Qt.TextElideMode.ElideRight)
-            if leading_selection:
-                table.setItemDelegate(LeadingSelectionDelegate(table))
             header = table.horizontalHeader()
             for column in range(table.columnCount()):
                 if fixed_sections and column in fixed_sections:
@@ -901,7 +866,6 @@ def run() -> int:
             layout.addLayout(progress)
 
             self.results = QTableWidget(0, 6)
-            self._configure_table(self.results)
             self.update_result_headers()
             self.results.horizontalHeader().setSectionsClickable(True)
             self.results.verticalHeader().setDefaultSectionSize(RESULT_TABLE_ROW_HEIGHT)
@@ -1917,26 +1881,6 @@ def run() -> int:
                 for column in range(table.columnCount())
             ]
 
-        def is_readonly_view(view) -> bool:  # type: ignore[no-untyped-def]
-            return view.editTriggers() == QAbstractItemView.EditTrigger.NoEditTriggers
-
-        def selection_behavior_name(table: QTableWidget) -> str:
-            if table.selectionBehavior() == QAbstractItemView.SelectionBehavior.SelectRows:
-                return "SelectRows"
-            return "Other"
-
-        def selection_mode_name(table: QTableWidget) -> str:
-            if table.selectionMode() == QAbstractItemView.SelectionMode.SingleSelection:
-                return "SingleSelection"
-            return "Other"
-
-        def status_table_selection(table: QTableWidget) -> dict[str, str]:
-            return {
-                "behavior": selection_behavior_name(table),
-                "mode": selection_mode_name(table),
-                "delegate": type(table.itemDelegate()).__name__,
-            }
-
         def single_layout_metrics(width: int | None) -> dict[str, int]:
             if width is None:
                 window.showMaximized()
@@ -1997,16 +1941,6 @@ def run() -> int:
             "round_action_word_wrap": window.round_actions.wordWrap(),
             "ranking_section_widths": section_widths(window.ranking),
             "round_action_section_widths": section_widths(window.round_actions),
-            "readonly_views": {
-                "event_log": is_readonly_view(window.events),
-                "ranking": is_readonly_view(window.ranking),
-                "round_action": is_readonly_view(window.round_actions),
-                "results": is_readonly_view(window.results),
-            },
-            "single_status_table_selection": {
-                "ranking": status_table_selection(window.ranking),
-                "round_action": status_table_selection(window.round_actions),
-            },
             "result_alignment": [
                 alignment_name(window.results, column)
                 for column in range(window.results.columnCount())
