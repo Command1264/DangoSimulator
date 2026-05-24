@@ -147,6 +147,26 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert probe["round_action_section_widths"][0] <= 52
     assert probe["round_action_section_widths"][1] >= 160
     assert probe["round_action_section_widths"][2] <= 52
+    assert probe["status_table_selection"] == {
+        "ranking": {"behavior": "SelectItems", "mode": "SingleSelection"},
+        "round_action": {"behavior": "SelectItems", "mode": "SingleSelection"},
+    }
+    assert probe["status_table_styles"] == {
+        "ranking": {
+            "transparent_selection": True,
+            "transparent_selection_background": True,
+            "left_indicator": True,
+            "palette_highlight": True,
+        },
+        "round_action": {
+            "transparent_selection": True,
+            "transparent_selection_background": True,
+            "left_indicator": True,
+            "palette_highlight": True,
+        },
+        "results_has_indicator": False,
+        "events_has_indicator": False,
+    }
 
 
 def test_gui_control_state_locks_global_settings_and_restarts_after_finish(tmp_path: Path) -> None:

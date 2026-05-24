@@ -66,6 +66,7 @@ def run() -> int:
         from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap, QValidator
         from PySide6.QtWidgets import (
             QApplication,
+            QAbstractItemView,
             QCheckBox,
             QComboBox,
             QDialog,
@@ -801,6 +802,7 @@ def run() -> int:
                     3: TABLE_STATUS_COLUMN_WIDTH,
                 },
             )
+            self._configure_status_table_selection(self.ranking)
             self.round_actions = QTableWidget(0, 4)
             self.round_actions.setObjectName("round_action_table")
             self.round_actions.setHorizontalHeaderLabels(["順序", "團子", "骰子", "狀態"])
@@ -812,6 +814,7 @@ def run() -> int:
                     3: TABLE_STATUS_COLUMN_WIDTH,
                 },
             )
+            self._configure_status_table_selection(self.round_actions)
             layout.addWidget(QLabel("即時名次"))
             layout.addWidget(self.ranking, 1)
             layout.addWidget(QLabel("本輪行動"))
@@ -831,6 +834,20 @@ def run() -> int:
                     header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
             table.setAlternatingRowColors(True)
             table.setShowGrid(False)
+
+        def _configure_status_table_selection(self, table: QTableWidget) -> None:
+            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+            table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+            table.setStyleSheet(
+                """
+                QTableWidget::item:selected {
+                    background-color: transparent;
+                    selection-background-color: transparent;
+                    color: palette(text);
+                    border-left: 3px solid palette(highlight);
+                }
+                """
+            )
 
         def _build_results_panel(self) -> QWidget:
             box = QGroupBox("多輪模擬")
@@ -1881,6 +1898,31 @@ def run() -> int:
                 for column in range(table.columnCount())
             ]
 
+        def selection_behavior_name(table: QTableWidget) -> str:
+            if table.selectionBehavior() == QAbstractItemView.SelectionBehavior.SelectItems:
+                return "SelectItems"
+            return "Other"
+
+        def selection_mode_name(table: QTableWidget) -> str:
+            if table.selectionMode() == QAbstractItemView.SelectionMode.SingleSelection:
+                return "SingleSelection"
+            return "Other"
+
+        def status_table_selection(table: QTableWidget) -> dict[str, str]:
+            return {
+                "behavior": selection_behavior_name(table),
+                "mode": selection_mode_name(table),
+            }
+
+        def status_style_flags(widget: QWidget) -> dict[str, bool]:
+            style = widget.styleSheet()
+            return {
+                "transparent_selection": "background-color: transparent" in style,
+                "transparent_selection_background": "selection-background-color: transparent" in style,
+                "left_indicator": "border-left" in style,
+                "palette_highlight": "palette(highlight)" in style,
+            }
+
         def single_layout_metrics(width: int | None) -> dict[str, int]:
             if width is None:
                 window.showMaximized()
@@ -1941,6 +1983,16 @@ def run() -> int:
             "round_action_word_wrap": window.round_actions.wordWrap(),
             "ranking_section_widths": section_widths(window.ranking),
             "round_action_section_widths": section_widths(window.round_actions),
+            "status_table_selection": {
+                "ranking": status_table_selection(window.ranking),
+                "round_action": status_table_selection(window.round_actions),
+            },
+            "status_table_styles": {
+                "ranking": status_style_flags(window.ranking),
+                "round_action": status_style_flags(window.round_actions),
+                "results_has_indicator": "border-left" in window.results.styleSheet(),
+                "events_has_indicator": "border-left" in window.events.styleSheet(),
+            },
             "result_alignment": [
                 alignment_name(window.results, column)
                 for column in range(window.results.columnCount())
