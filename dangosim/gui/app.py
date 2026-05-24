@@ -751,12 +751,6 @@ def run() -> int:
             self.run_count.setRange(1, MAX_BATCH_RUNS)
             self.run_count.setValue(1000)
             self.run_count.setMinimumWidth(145)
-            self.seed_mode = QComboBox()
-            self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
-            self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
-            self.seed_input = QLineEdit(str(self.base_config.seed or 0))
-            self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
-            self.seed_input.setMinimumWidth(185)
             self.worker_count = QComboBox()
             self.populate_worker_options()
             self.worker_count.setToolTip("多輪模擬使用的 CPU worker 數量")
@@ -766,11 +760,6 @@ def run() -> int:
             self.stop_batch_button = QPushButton("停止模擬")
             controls.addWidget(QLabel("場數"))
             controls.addWidget(self.run_count)
-            controls.addWidget(QLabel("Seed"))
-            controls.addWidget(self.seed_mode)
-            self.fixed_seed_label = QLabel("固定 Seed：")
-            controls.addWidget(self.fixed_seed_label)
-            controls.addWidget(self.seed_input)
             controls.addWidget(QLabel("CPU worker"))
             controls.addWidget(self.worker_count)
             controls.addWidget(QLabel("排序"))
@@ -827,6 +816,27 @@ def run() -> int:
             separator.setFrameShape(QFrame.Shape.HLine)
             separator.setFrameShadow(QFrame.Shadow.Sunken)
             layout.addWidget(separator)
+
+            layout.addWidget(QLabel("Seed 設定"))
+            seed_panel = QWidget()
+            seed_panel.setObjectName("seed_settings_panel")
+            seed_layout = QHBoxLayout(seed_panel)
+            seed_layout.setContentsMargins(0, 0, 0, 0)
+            self.seed_mode = QComboBox()
+            self.seed_mode.setObjectName("seed_mode")
+            self.seed_mode.addItem("固定 seed", SeedMode.FIXED.value)
+            self.seed_mode.addItem("系統隨機 seed", SeedMode.SYSTEM.value)
+            self.seed_input = QLineEdit(str(self.base_config.seed or 0))
+            self.seed_input.setObjectName("seed_input")
+            self.seed_input.setPlaceholderText(f"0 到 {MAX_SEED_EXCLUSIVE - 1}")
+            self.seed_input.setMinimumWidth(185)
+            self.fixed_seed_label = QLabel("固定 Seed：")
+            seed_layout.addWidget(QLabel("Seed 模式"))
+            seed_layout.addWidget(self.seed_mode)
+            seed_layout.addWidget(self.fixed_seed_label)
+            seed_layout.addWidget(self.seed_input)
+            seed_layout.addStretch()
+            layout.addWidget(seed_panel)
 
             layout.addWidget(QLabel("單輪模擬設定"))
             self.settings_single_summary = QLabel()
@@ -1396,7 +1406,7 @@ def run() -> int:
             "current_seed_after_system_batch_result": window.current_seed,
             "seed_label_after_system_batch_result": window.seed_label.text(),
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_EVENT_SCROLL_PROBE") == "1":
         base_state = window.controller.view_state()
@@ -1436,7 +1446,7 @@ def run() -> int:
             "bottom_auto_bottom": second_maximum > 0 and second_value == second_maximum,
             "review_position_preserved": review_value == min(review_target, review_maximum),
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_LAYOUT_PROBE") == "1":
         window.start_race()
@@ -1488,6 +1498,24 @@ def run() -> int:
                 for index in range(stack.count())
             ]
 
+        def ancestor_names(widget: QWidget) -> list[str]:
+            names: list[str] = []
+            parent = widget.parentWidget()
+            while parent is not None:
+                if parent.objectName():
+                    names.append(parent.objectName())
+                parent = parent.parentWidget()
+            return names
+
+        def label_texts(widget: QWidget) -> list[str]:
+            return [
+                label.text()
+                for label in widget.findChildren(QLabel)
+            ]
+
+        batch_workspace = window.workspace_stack.widget(1)
+        settings_workspace = window.workspace_stack.widget(2)
+
         probe = {
             "window_maximized": window.isMaximized(),
             "workspace_nav_items": list_items(window.workspace_nav),
@@ -1500,6 +1528,10 @@ def run() -> int:
                 for index in range(window.main_splitter.count())
             ],
             "result_table_parent": window.results.parentWidget().objectName(),
+            "seed_mode_ancestors": ancestor_names(window.seed_mode),
+            "seed_input_ancestors": ancestor_names(window.seed_input),
+            "batch_workspace_labels": label_texts(batch_workspace),
+            "settings_workspace_labels": label_texts(settings_workspace),
             "ranking_alignment": [
                 alignment_name(window.ranking, column)
                 for column in range(window.ranking.columnCount())
@@ -1514,7 +1546,7 @@ def run() -> int:
             ],
             "result_visible_rows": visible_rows(window.results),
         }
-        print(json.dumps(probe, ensure_ascii=False))
+        print(json.dumps(probe))
         QTimer.singleShot(0, app.quit)
     elif os.environ.get("DANGOSIM_GUI_SMOKE") == "1":
         QTimer.singleShot(0, app.quit)

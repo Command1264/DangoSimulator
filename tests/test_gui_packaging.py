@@ -117,6 +117,12 @@ def test_gui_dashboard_layout_places_events_under_participants_and_aligns_tables
     assert probe["event_log_parent"] == "left_panel"
     assert probe["splitter_widgets"] == ["left_panel", "center_panel", "right_panel"]
     assert probe["result_table_parent"] == "batch_simulation_workspace"
+    assert "settings_workspace" in probe["seed_mode_ancestors"]
+    assert "settings_workspace" in probe["seed_input_ancestors"]
+    assert "Seed 設定" in probe["settings_workspace_labels"]
+    assert "固定 Seed：" in probe["settings_workspace_labels"]
+    assert "Seed" not in probe["batch_workspace_labels"]
+    assert "固定 Seed：" not in probe["batch_workspace_labels"]
     assert probe["ranking_alignment"] == ["center", "left", "right", "center"]
     assert probe["round_action_alignment"] == ["center", "left", "center", "center"]
     assert probe["result_alignment"] == ["center", "left", "right", "right", "right", "right"]
