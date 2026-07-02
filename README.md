@@ -23,6 +23,17 @@ docs/              架構、規格、發行與 QA 文件
 scripts/           開發環境與打包腳本
 ```
 
+```mermaid
+flowchart LR
+    A["data/default_race.json"] --> B["config_loader"]
+    B --> C["dangosim.core"]
+    C --> D["單場 RaceSimulator"]
+    C --> E["批次 simulate_many"]
+    E --> F["CLI JSON / CSV output"]
+    C --> G["PySide6 GUI service"]
+    G --> H["桌面互動介面"]
+```
+
 核心邊界：
 
 - `dangosim/core` 不依賴 PySide6、pyqtgraph、PyInstaller 或 CLI。
@@ -36,6 +47,13 @@ scripts/           開發環境與打包腳本
 - 以 JSON 定義賽道、裝置、角色能力與公式。
 - 模擬核心與 UI 分離，方便測試與調整規則。
 - 內建預設資料：[`data/default_race.json`](data/default_race.json)。
+
+`default_race.json` 主要包含：
+
+- `track`：賽道長度、終點與裝置位置。
+- `dangos`：角色 ID、名稱、組別、起始位置與能力設定。
+- `seed`：預設隨機種子，支援可重現的模擬結果。
+- `boss_ranked`：控制特殊角色是否納入排名規則。
 
 ### CLI / Headless 模式
 
@@ -87,6 +105,30 @@ CLI：
 .\.venv\Scripts\python.exe -m dangosim.cli.main --help
 ```
 
+執行 1,000 場批次模擬並輸出 JSON：
+
+```powershell
+.\.venv\Scripts\python.exe -m dangosim.cli.main simulate `
+  --config data\default_race.json `
+  --runs 1000 `
+  --seed 20260517 `
+  --workers auto `
+  --out output\result.json `
+  --format json
+```
+
+輸出 CSV：
+
+```powershell
+.\.venv\Scripts\python.exe -m dangosim.cli.main simulate `
+  --config data\default_race.json `
+  --runs 1000 `
+  --seed 20260517 `
+  --workers 1 `
+  --out output\result.csv `
+  --format csv
+```
+
 GUI：
 
 ```powershell
@@ -99,7 +141,7 @@ GUI：
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-測試涵蓋 core race、abilities、batch simulation、CLI/data、GUI services/settings、packaging 等模組。
+測試涵蓋 core race、abilities、batch simulation、CLI/data、GUI services/settings、packaging 等模組。核心規則可在不啟動 GUI 的情況下測試，CLI 與 GUI service 則共用同一套 core API，避免不同入口產生規則分歧。
 
 ## 打包
 
